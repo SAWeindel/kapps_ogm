@@ -63,7 +63,7 @@ def minimal_builder(node: Node) -> Type[Identifiable]:
                 """
             ],
         )
-        result = db.query(query)
+        result = db.query(query.to_string())
         attributes = {
             IRI(binding["attr"]["value"]): (
                 IRI,

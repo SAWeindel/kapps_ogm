@@ -44,9 +44,28 @@ def test_reference(db: GraphDB, mw: aas.AasMiddleware):
     assert node.id == INSTANCE_ID
     assert node.data == REFERENCE_DICT
 
-    assert not node.is_loaded
     assert node.model is None
     assert node.instance is None
+    assert not node.is_loaded
+
+    data_model = aas.DataModel.from_models(node.instance)
+
+    model_dict = data_model.model_dump()
+    assert model_dict == {"id": INSTANCE_ID}
+
+
+def test_build(db: GraphDB):
+    ogm = OGM(db=db, loader_func=minimal_loader, builder_func=minimal_builder)
+
+    node = ogm.create_node(id=INSTANCE_ID)
+    node.build()
+
+    assert node.id == INSTANCE_ID
+    assert node.data == FIRST_LEVEL_DICT
+    assert node.model is not None
+
+    assert node.instance is None
+    assert not node.is_loaded
 
     data_model = aas.DataModel.from_models(node.instance)
 
@@ -61,11 +80,10 @@ def test_load(db: GraphDB):
     loaded_instance = node.load()
 
     assert node.id == INSTANCE_ID
-    assert node.is_loaded
     assert node.data == FIRST_LEVEL_DICT
-
     assert node.model is not None
     assert node.instance is not None
+    assert node.is_loaded
 
     data_model = aas.DataModel.from_models(loaded_instance)
 

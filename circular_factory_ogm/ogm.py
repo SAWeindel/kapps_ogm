@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Optional, Type
+from typing import Any, Callable, Dict, Optional, Type, Union
 from pydantic import BaseModel
 
 from graph_db_interface import GraphDB, IRI
@@ -38,7 +38,7 @@ class OGM:
         self._loader_func = loader_func or self._default_loader
         self._builder_func = builder_func or self._default_builder
 
-    def _default_loader(self, id: IRI, db: GraphDB) -> Dict[str, Any]:
+    def _default_loader(self, node: Node) -> Dict[str, Any]:
         """
         Default loader stub.
 
@@ -48,7 +48,7 @@ class OGM:
             "Default loader not implemented. Provide loader_func or implement _default_loader."
         )
 
-    def _default_builder(self, id: IRI, db: GraphDB) -> Type[BaseModel]:
+    def _default_builder(self, node: Node) -> Type[BaseModel]:
         """
         Default builder stub for dynamic Pydantic model generation.
 
@@ -60,21 +60,23 @@ class OGM:
             "Use set_type() to register model classes or provide a custom builder_func."
         )
 
-    def loader(self, id: IRI) -> Dict[str, Any]:
+    def loader(self, node: Node) -> Dict[str, Any]:
         """
         Partial loader function that uses the OGM's database connection.
 
         This can be passed to Node.load() method.
         """
-        return self._loader_func(id, self.db)
+        return self._loader_func(node)
 
-    def builder(self, id: IRI) -> Type[BaseModel]:
+    def builder(self, node: Node) -> Type[BaseModel]:
         """
         Partial builder function that uses the OGM's database connection.
 
         This is used internally when Node._build() is called.
         """
-        return self._builder_func(id, self.db)
+        model = self._builder_func(node)
+        self.set_type(node.id, model)
+        return model
 
     def set_type(self, id: IRI, model_cls: Type[BaseModel]) -> None:
         """
@@ -101,7 +103,7 @@ class OGM:
     def create_node(
         self,
         model_cls: Optional[Type[BaseModel]] = None,
-        id: Optional[IRI] = None,
+        id: Optional[Union[str, IRI]] = None,
         data: Optional[Dict[str, Any]] = None,
         instance: Optional[BaseModel] = None,
     ) -> Node:

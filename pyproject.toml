@@ -10,7 +10,7 @@ authors = ["Etienne Hoffmann <etienne.hoffmann@kit.edu>", "Sören Weindel <soere
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.12"
 rdflib = "^7.1.3"
 pydantic = "^2.12.4"
 graph_db_interface = "^1.2.0"

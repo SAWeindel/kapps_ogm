@@ -51,7 +51,7 @@ def test_reference(db: GraphDB, mw: aas.AasMiddleware):
     data_model = aas.DataModel.from_models(node.instance)
 
     model_dict = data_model.model_dump()
-    assert model_dict == {"id": INSTANCE_ID}
+    assert model_dict == {"id": INSTANCE_ID} #==repr(node.instance) what should be eq to repr(node)
 
 
 def test_build(db: GraphDB):
@@ -70,7 +70,7 @@ def test_build(db: GraphDB):
     data_model = aas.DataModel.from_models(node.instance)
 
     model_dict = data_model.model_dump()
-    assert model_dict == {"id": INSTANCE_ID}
+    assert model_dict == {"id": INSTANCE_ID}# because not loaded yet
 
 
 def test_load(db: GraphDB):
@@ -88,4 +88,4 @@ def test_load(db: GraphDB):
     data_model = aas.DataModel.from_models(loaded_instance)
 
     model_dict = data_model.model_dump()
-    assert model_dict == FIRST_LEVEL_DICT
+    assert model_dict == FIRST_LEVEL_DICT #==repr(node.instance) what should be eq to repr(node)

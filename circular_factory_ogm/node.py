@@ -10,6 +10,7 @@ from typing import (
     TypeVar,
     Union,
     TypeAlias,
+    ForwardRef
 )
 from pydantic import BaseModel
 
@@ -181,9 +182,11 @@ class Node(Generic[T]):
 
         if self.model is None:
             self.build()
+            
 
         if self.data is None:
             self.data = self.ogm.loader(self)
+            
 
         if "id" not in self.data:
             self.data = {**self.data, "id": self.id}

@@ -11,7 +11,7 @@ from circular_factory_ogm.builders.minimal_builder import minimal_builder
 from circular_factory_ogm.loaders.loader_eh import loader_eh
 
 NODE_ID = IRI(
-    "https://www.sfb1574.kit.edu/ontologies/DemoStructureInstance#NodeBInstance"
+    "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#ConveyorBelt1_left"
 )
 
 

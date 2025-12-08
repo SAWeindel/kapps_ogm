@@ -88,7 +88,7 @@ class Node(Generic[T]):
         if id is not None and instance is not None and instance.id != id:
             raise ValueError("Instance URI does not match provided IRI")
 
-        self.data = data or {}
+        self.data = data or None
         self.instance: Optional[T] = instance
         self.ogm = ogm
 
@@ -115,8 +115,6 @@ class Node(Generic[T]):
             self.id = id
         else:
             raise ValueError("Unable to determine model class for Node")
-
-        self.data["id"] = self.id
 
     @property
     def is_loaded(self) -> bool:
@@ -174,8 +172,9 @@ class Node(Generic[T]):
         if self.model is None:
             self.build()
 
-        self.data |= self.ogm.loader(self)
-        self.ogm.resolve_types()
+        if self.data is None:
+            self.data = self.ogm.loader(self)
+            self.ogm.resolve_types()
         self.instance = self.model.model_validate(self.data)
 
         return self.instance

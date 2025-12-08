@@ -10,6 +10,7 @@ from typing import (
     TypeVar,
     Union,
     TypeAlias,
+    ForwardRef,
 )
 from pydantic import BaseModel, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
@@ -173,7 +174,7 @@ class Node(Generic[T]):
         if self.model is None:
             self.build()
 
-        self.data = self.ogm.loader(self)
+        self.data |= self.ogm.loader(self)
         self.ogm.resolve_types()
         self.instance = self.model.model_validate(self.data)
 

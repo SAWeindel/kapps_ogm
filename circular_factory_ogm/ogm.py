@@ -26,6 +26,7 @@ class OGM:
         db: GraphDB,
         loader_func: Optional[Callable[[IRI, GraphDB], Dict[str, Any]]] = None,
         builder_func: Optional[Callable[[IRI, GraphDB], Type[pd.BaseModel]]] = None,
+        expansion_blacklist: Optional[set[IRI]] = None,
     ):
         """
         Initialize the OGM.
@@ -41,6 +42,7 @@ class OGM:
         self.type_cache: Dict[IRI, Type[pd.BaseModel]] = {}
         self._loader_func = loader_func or self._default_loader
         self._builder_func = builder_func or self._default_builder
+        self.expansion_blacklist = expansion_blacklist or set()
 
     def _default_loader(self, node: Node) -> Dict[str, Any]:
         """

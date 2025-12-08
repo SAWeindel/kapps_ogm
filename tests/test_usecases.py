@@ -68,7 +68,9 @@ def test_reference(db: GraphDB):
     data_model = aas.DataModel.from_models(node)
 
     model_dict = data_model.model_dump()
-    assert model_dict == {"id": IRI("dsi:NodeAInstance")}
+    assert model_dict == {
+        "id": IRI("dsi:NodeAInstance")
+    }  # ==repr(node.instance) what should be eq to repr(node)
 
 
 def test_build(db: GraphDB):
@@ -88,7 +90,7 @@ def test_build(db: GraphDB):
     data_model = aas.DataModel.from_models(node)
 
     model_dict = data_model.model_dump()
-    assert model_dict == {"id": IRI("dsi:NodeAInstance")}
+    assert model_dict == {"id": IRI("dsi:NodeAInstance")}  # because not loaded yet
 
 
 def test_load(db: GraphDB):
@@ -128,7 +130,9 @@ def test_load_more(db: GraphDB):
     data_model = aas.DataModel.from_models(loaded_instance)
 
     model_dict = data_model.model_dump()
-    assert model_dict == NODEA_LEVEL1
+    assert (
+        model_dict == NODEA_LEVEL1
+    )  # ==repr(node.instance) what should be eq to repr(node)
 
     node2 = getattr(node, CHILD_PROPERTY)
 

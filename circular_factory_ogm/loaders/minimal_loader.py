@@ -1,6 +1,7 @@
 from typing import Dict, Any
 
 from graph_db_interface import GraphDB, IRI
+from graph_db_interface.utils.typemap import XSDToPythonTypes
 
 from circular_factory_ogm.node import Node
 
@@ -17,7 +18,14 @@ def minimal_loader(node: Node) -> Dict[str, Any]:
     ogm = node.ogm
     db = ogm.db
 
-    result = {"id": IRI(id)}
+    instance_data = {"id": IRI(id)}
+
     triples = db.triples_get(sub=id)
-    result |= {pred: obj for _, pred, obj in triples}
-    return result
+    for _, pred, obj in triples:
+        if isinstance(obj, IRI):
+            node = ogm.create_node(id=obj)
+            instance_data[pred] = node
+        else:
+            instance_data[pred] = obj
+
+    return instance_data

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from typing import Any, Callable, Dict, Optional, Type, Union
-from pydantic import BaseModel
+import pydantic as pd
+
+from aas_middleware.model.core import Identifiable
 
 from graph_db_interface import GraphDB, IRI
 
@@ -23,7 +25,7 @@ class OGM:
         self,
         db: GraphDB,
         loader_func: Optional[Callable[[IRI, GraphDB], Dict[str, Any]]] = None,
-        builder_func: Optional[Callable[[IRI, GraphDB], Type[BaseModel]]] = None,
+        builder_func: Optional[Callable[[IRI, GraphDB], Type[pd.BaseModel]]] = None,
     ):
         """
         Initialize the OGM.
@@ -34,7 +36,9 @@ class OGM:
             builder_func: Optional custom builder function (id, db) -> Type[BaseModel]
         """
         self.db = db
-        self.type_cache: Dict[IRI, Type[BaseModel]] = {}
+        self.nodes: Dict[IRI, Node] = {}
+        self.type_references: set[IRI] = set()
+        self.type_cache: Dict[IRI, Type[pd.BaseModel]] = {}
         self._loader_func = loader_func or self._default_loader
         self._builder_func = builder_func or self._default_builder
 
@@ -48,7 +52,7 @@ class OGM:
             "Default loader not implemented. Provide loader_func or implement _default_loader."
         )
 
-    def _default_builder(self, node: Node) -> Type[BaseModel]:
+    def _default_builder(self, node: Node) -> Type[pd.BaseModel]:
         """
         Default builder stub for dynamic Pydantic model generation.
 
@@ -68,7 +72,7 @@ class OGM:
         """
         return self._loader_func(node)
 
-    def builder(self, node: Node) -> Type[BaseModel]:
+    def builder(self, node: Node) -> Type[pd.BaseModel]:
         """
         Partial builder function that uses the OGM's database connection.
 
@@ -78,7 +82,7 @@ class OGM:
         self.set_type(node.id, model)
         return model
 
-    def set_type(self, id: IRI, model_cls: Type[BaseModel]) -> None:
+    def set_type(self, id: IRI, model_cls: Type[pd.BaseModel]) -> None:
         """
         Register a Pydantic model class for a specific URI in the type cache.
 
@@ -88,7 +92,7 @@ class OGM:
         """
         self.type_cache[id] = model_cls
 
-    def get_type(self, id: IRI) -> Optional[Type[BaseModel]]:
+    def get_type(self, id: IRI) -> Optional[Type[pd.BaseModel]]:
         """
         Retrieve a Pydantic model class from the type cache.
 
@@ -102,10 +106,10 @@ class OGM:
 
     def create_node(
         self,
-        model_cls: Optional[Type[BaseModel]] = None,
+        model_cls: Optional[Type[pd.BaseModel]] = None,
         id: Optional[Union[str, IRI]] = None,
         data: Optional[Dict[str, Any]] = None,
-        instance: Optional[BaseModel] = None,
+        instance: Optional[pd.BaseModel] = None,
     ) -> Node:
         """
         Create a Node with the OGM's type cache and OGM reference.
@@ -119,7 +123,7 @@ class OGM:
         Returns:
             A new Node instance configured with this OGM's type cache and OGM reference
         """
-        return Node(
+        node = Node[id.lined](
             model_cls=model_cls,
             id=id,
             data=data,
@@ -127,3 +131,30 @@ class OGM:
             type_cache=self.type_cache,
             ogm=self,
         )
+
+        self.nodes[node.id] = node
+        return node
+
+    def resolve_types(self):
+        """
+        For all referenced types collected during building, ensure their model
+        classes exist in the type cache or are created as reference nodes.
+        Resolves all forward references.
+        """
+        models = {}
+        for class_iri in self.type_references:
+            if class_iri in self.type_cache:
+                model = self.type_cache[class_iri]
+                print(f"found model {model} for {class_iri}")
+            else:
+                model = pd.create_model(
+                    class_iri.lined,
+                    __base__=Identifiable,
+                    id=(IRI, class_iri),
+                )
+                self.type_cache[class_iri] = model
+                print(f"created ref node {model} for {class_iri}")
+            models[class_iri.lined] = model
+
+        for model in models.values():
+            model.model_rebuild()

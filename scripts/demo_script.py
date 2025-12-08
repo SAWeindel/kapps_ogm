@@ -1,12 +1,15 @@
 import os
 import uvicorn
-
 import aas_middleware as aas
 from graph_db_interface import GraphDBCredentials, GraphDB, IRI
 
 from circular_factory_ogm.ogm import OGM
 from circular_factory_ogm.loaders.minimal_loader import minimal_loader
 from circular_factory_ogm.builders.minimal_builder import minimal_builder
+
+NODE_ID = IRI(
+    "https://www.sfb1574.kit.edu/ontologies/DemoStructureInstance#NodeBInstance"
+)
 
 
 def main():
@@ -26,12 +29,11 @@ def main():
     print(f"  - Type cache is empty: {ogm.type_cache}")
 
     print("\n=== Step 3: Create Node with TransferUnit URI ===")
-    node_id = IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit")
-    print(f"Creating node for URI: {node_id}")
+    print(f"Creating node for URI: {NODE_ID}")
 
     # Create node using OGM - this will trigger the builder
-    node_ref = ogm.create_node(id=node_id)
-    node = ogm.create_node(id=node_id)
+    node_ref = ogm.create_node(id=NODE_ID)
+    node = ogm.create_node(id=NODE_ID)
     print(f"✓ Node created: {node}")
 
     print("\n=== Step 4: Check what happened during node creation ===")
@@ -40,7 +42,10 @@ def main():
     print(f"  - Node model class: {node.model}")
     print(f"  - Type of Node: {type(node)}")
     print(f"  - Type cache now contains: {list(ogm.type_cache.keys())}")
-    print(f"  - Cached model class for URI: {ogm.get_type(node_id)}")
+    print(f"  - Cached model class for URI: {ogm.get_type(NODE_ID)}")
+
+    node.build()
+    ogm.resolve_types()
 
     print("\n=== Step 5: Load the node data from GraphDB ===")
     print("Calling node.load() with OGM's loader...")
@@ -52,15 +57,15 @@ def main():
 
     print("\n=== Step 6: Demonstrate type cache reuse ===")
     print("Creating a second node with the same URI...")
-    node2 = ogm.create_node(id=node_id)
+    node2 = ogm.create_node(id=NODE_ID)
     print(f"✓ Second node created: {node2}")
     print(f"  - Did it call builder again? No! It reused the cached type.")
     print(f"  - Both nodes share the same model class: {node.model is node2.model}")
-    node3 = ogm.create_node(id=node_id, model_cls=node.model)
+    node3 = ogm.create_node(id=NODE_ID, model_cls=node.model)
     print(f"✓ Third node created with both id and model class: {node3}")
-    node4 = ogm.create_node(id=node_id, instance=loaded_instance)
+    node4 = ogm.create_node(id=NODE_ID, instance=loaded_instance)
     print(f"✓ Fourth node created with both id and instance: {node4}")
-    node5 = ogm.create_node(id=node_id, model_cls=node.model, instance=loaded_instance)
+    node5 = ogm.create_node(id=NODE_ID, model_cls=node.model, instance=loaded_instance)
     print(f"✓ Fifth node created with id, model class, and instance: {node5}")
 
     print("\n=== Summary ===")
@@ -74,9 +79,9 @@ def main():
     data_model = aas.DataModel.from_models(node.instance)
     middleware = aas.AasMiddleware()
     middleware.load_data_model(
-        name="TransferUnit_1", data_model=data_model, persist_instances=True
+        name="DemoStructure_1", data_model=data_model, persist_instances=True
     )
-    middleware.generate_rest_api_for_data_model("TransferUnit_1")
+    middleware.generate_rest_api_for_data_model("DemoStructure_1")
     uvicorn.run(middleware.app)
 
 

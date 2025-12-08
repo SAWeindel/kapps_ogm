@@ -11,7 +11,8 @@ from typing import (
     Union,
     TypeAlias,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, GetCoreSchemaHandler
+from pydantic_core import CoreSchema, core_schema
 
 from graph_db_interface import IRI, GraphDB
 
@@ -24,17 +25,17 @@ Loader: TypeAlias = Callable[[IRI, GraphDB], Union[Dict[str, Any], T]]
 
 class Node(Generic[T]):
     """
-    A generic Node class acting as a container for Pydantic models generated from RDF data.
+       A generic Node class acting as a container for Pydantic models generated from RDF data.
 
-    The Node class contains a reference to the IRI of the RDF resource and may contain
-    a Pydantic model instance if loaded. It supports lazy loading from a triplestore.
+       The Node class contains a reference to the IRI of the RDF resource and may contain
+    lazy loading from a triplestore.
 
-    Can be created from:
-      - A IRI only (lazy reference)
-      - A IRI with partial data (lazy reference with cached data)
-      - A Pydantic model instance directly (already loaded)
+       Can be created from:
+         - A IRI only (lazy reference)
+         - A IRI with partial data (lazy reference with cached data)
+         - A Pydantic model instance directly (already loaded)
 
-    The .load(loader) method loads the full object if not already loaded using loader(id) -> dict|T.
+       The .load(loader) method loads the full object if not already loaded using loader(id) -> dict|T.
     """
 
     # __slots__ = ("id", "_data", "instance", "model_cls", "_ogm")
@@ -76,9 +77,6 @@ class Node(Generic[T]):
         if instance is not None and not hasattr(instance, "id"):
             raise ValueError("Instance must have a 'id' attribute")
 
-        if model_cls is not None and model_cls.model_fields.get("id") is None:
-            raise ValueError("Model class must have a 'id' attribute")
-
         if (
             instance is not None
             and model_cls is not None
@@ -89,16 +87,7 @@ class Node(Generic[T]):
         if id is not None and instance is not None and instance.id != id:
             raise ValueError("Instance URI does not match provided IRI")
 
-        if (
-            id is not None
-            and model_cls is not None
-            and model_cls.model_fields["id"].default != id
-        ):
-            raise ValueError(
-                "Model class 'id' attribute default does not match provided IRI"
-            )
-
-        self.data = data
+        self.data = data or {}
         self.instance: Optional[T] = instance
         self.ogm = ogm
 
@@ -125,6 +114,8 @@ class Node(Generic[T]):
             self.id = id
         else:
             raise ValueError("Unable to determine model class for Node")
+
+        self.data["id"] = self.id
 
     @property
     def is_loaded(self) -> bool:
@@ -182,12 +173,8 @@ class Node(Generic[T]):
         if self.model is None:
             self.build()
 
-        if self.data is None:
-            self.data = self.ogm.loader(self)
-
-        if "id" not in self.data:
-            self.data = {**self.data, "id": self.id}
-
+        self.data = self.ogm.loader(self)
+        self.ogm.resolve_types()
         self.instance = self.model.model_validate(self.data)
 
         return self.instance
@@ -215,3 +202,21 @@ class Node(Generic[T]):
             return f"Node{self.model!r}"
         else:
             return f"Node<ref {self.id!r}, data: {bool(self.data)}>"
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls,
+        source_type: Any,
+        handler: GetCoreSchemaHandler,
+    ) -> CoreSchema:
+        """
+        Provide a permissive Pydantic core schema for IRI fields.
+
+        Args:
+            source_type (Any): The source type passed by Pydantic.
+            handler (GetCoreSchemaHandler): Pydantic schema handler.
+
+        Returns:
+            CoreSchema: A schema accepting any value (validated by IRI itself).
+        """
+        return core_schema.any_schema()

@@ -1,0 +1,59 @@
+@prefix ds: <https://www.sfb1574.kit.edu/ontologies/DemoStructure#> .
+@prefix dsi: <https://www.sfb1574.kit.edu/ontologies/DemoStructureInstance#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+ds: a owl:Ontology .
+
+dsi: a owl:Ontology ;
+	owl:imports ds: .
+
+# Classes
+ds:NodeA a owl:Class ;
+    rdfs:label "Node A" ;
+	ds:hasNodeB ds:NodeB ;
+	ds:hasAttributeA xsd:string ;
+    ds:hasAttributeA2 xsd:double .
+
+ds:NodeB a owl:Class ;
+    rdfs:label "Node B" ;
+	ds:hasNodeC ds:NodeC ;
+	ds:hasBlankAttribute _:BlankAttribute ;
+	ds:hasAttributeB xsd:string .
+
+ds:NodeC a owl:Class ;
+    rdfs:label "Node C" ;
+	ds:hasAttributeC xsd:string .
+
+_:BlankAttribute a owl:Class ;
+    rdfs:label "Blank Attribute" ;
+    owl:intersectionOf (
+        [
+            a owl:Restriction ;
+            owl:onProperty ds:hasValue ;
+            owl:someValuesFrom xsd:string
+        ]
+        [
+            a owl:Restriction ;
+            owl:onProperty ds:hasNumber ;
+            owl:someValuesFrom xsd:integer
+        ]
+    ) .
+
+# Instances
+dsi:NodeAInstance a owl:NamedIndividual , ds:NodeA ;
+    ds:hasNodeB dsi:NodeBInstance ;
+    ds:hasAttributeA "Attribute A Content" ;
+    ds:hasAttributeA2 3.14 .
+
+dsi:NodeBInstance a owl:NamedIndividual , ds:NodeB ;
+	ds:hasNodeC dsi:NodeCInstance ;
+	ds:hasBlankAttribute [
+		ds:hasValue "Blank Attribute Content" ;
+		ds:hasNumber 123
+	] ;
+	ds:hasAttributeB "Attribute B Content" .
+
+dsi:NodeCInstance a owl:NamedIndividual , ds:NodeC ;
+	ds:hasAttributeC "Attribute C Content" .

@@ -1,11 +1,12 @@
-from typing import Type, Tuple, Any
+from typing import Type
 import pydantic as pd
 
-from graph_db_interface import GraphDB, IRI, SPARQLQuery
+from graph_db_interface import IRI, SPARQLQuery, process_bindings_select
+from graph_db_interface.utils.utils import convert_query_result_to_python_type
+from graph_db_interface.utils.typemap import XSDToPythonTypes
 from aas_middleware.model.core import Identifiable
 
 from circular_factory_ogm.node import Node
-from circular_factory_ogm.ogm import OGM
 
 
 def minimal_builder(node: Node) -> Type[Identifiable]:
@@ -20,66 +21,82 @@ def minimal_builder(node: Node) -> Type[Identifiable]:
     Returns:
         A simple Pydantic model class
     """
-    id = node.id
+    node_id = node.id
     ogm = node.ogm
     db = ogm.db
 
-    def _get_fields() -> dict[str, Tuple[Type, Any]]:
-        # query = SPARQLQuery()
-        # query.add_select_block(
-        #     variables=["?attr", "?field", "?range"],
-        #     where_clauses=[
-        #         f"""
-        #         {id.n3()} ?attr ?field .
-        #         {{
-        #             ?attr {IRI("rdfs:range").n3()} ?range .
-        #         }}
-        #         UNION
-        #         {{
-        #             ?attr {IRI("rdfs:domain").n3()} {id.n3()} .
-        #         }}
+    class_id = db.owl_get_classes_of_individual(node_id)[0]
 
-        #         """
-        #     ],
-        # )
-        # result = db.query(query)
-        # fields = {
-        #     IRI(binding["attr"]["value"]).short(): IRI
-        #     for binding in result["results"]["bindings"]
-        # }
+    model_creation_dict = {}
 
-        triples_sub = db.triples_get(sub=id)
-        fields = {pred: (type(obj), obj) for _, pred, obj in triples_sub}
-        return fields
+    # find direct fields
+    query = SPARQLQuery()
+    query.add_select_block(
+        variables=["?attr", "?field"],
+        where_clauses=[
+            f"""
+            {class_id.n3()} ?attr ?field .
+            FILTER(!isBlank(?field)) .
+            """
+        ],
+    )
+    result = db.query(query)
+    for binding in result["results"]["bindings"]:
+        attr = IRI(binding["attr"]["value"])
+        field_type = binding["field"]["type"]
+        if field_type == "uri":
+            field = IRI(binding["field"]["value"])
+            if field in XSDToPythonTypes:
+                # Direct datatype field - type is python equivalent of XSD type
+                model_creation_dict[attr] = (XSDToPythonTypes[field], pd.Field())
+            else:
+                # Reference to another class - type is forward reference to model of that class
+                # OGM keeps track of class references to ensure they
+                # are built when the pydantic model is constructed
+                print(f"build added {field} to ref")
+                ogm.type_references.add(field)
+                model_creation_dict[attr] = (f"models['{field.lined}']", pd.Field())
+        elif field_type == "literal":
+            # Direct datatype field - type is python equivalent of XSD type
+            literal = convert_query_result_to_python_type(binding["field"])
+            model_creation_dict[attr] = (type(literal), literal)
 
-    def _get_attributes() -> dict[IRI, IRI]:
-        query = SPARQLQuery()
-        query.add_select_block(
-            variables=["?attr", "?range"],
-            where_clauses=[
-                f"""
-                ?attr {IRI("rdfs:domain").n3()} {id.n3()} .
-                ?attr {IRI("rdfs:range").n3()} ?range .
-                """
-            ],
-        )
-        result = db.query(query.to_string())
-        attributes = {
-            IRI(binding["attr"]["value"]): (
-                IRI,
-                IRI(binding["range"]["value"]),
-            )
-            for binding in result["results"]["bindings"]
-        }
-        return attributes
-
-    model_creation_dict = _get_fields() | _get_attributes()
+    # find attributes attached to blank nodes
+    query = SPARQLQuery()
+    query.add_select_block(
+        variables=["?attr", "?sub_attr", "?field"],
+        where_clauses=[
+            f"""
+            {class_id.n3()} ?attr ?attribute_node .
+            ?attribute_node owl:intersectionOf ?fields_list .
+            ?fields_list rdf:rest*/rdf:first ?field_node .
+            ?field_node a owl:Restriction ;
+                owl:onProperty ?sub_attr ;
+                owl:someValuesFrom ?field 
+            """
+        ],
+    )
+    result = db.query(query)
+    attributes = process_bindings_select(
+        result["results"]["bindings"],
+        variables=["sub_attr", "field"],
+        grouping_variables=["attr"],
+    )
+    # TODO fix loader to actually detect and support this
+    for attr_str, attr_dict in attributes.items():
+        model_creation_dict[IRI(attr_str)] = (dict, pd.Field())
 
     model = pd.create_model(
-        id.fragment or id,
+        class_id.lined,
         __base__=Identifiable,
-        id=(IRI, id),
+        id=(IRI, class_id),
         **model_creation_dict,
     )
+
+    # Cache the created model in the OGM's type cache
+    print(f"build added {class_id} to ref")
+    ogm.type_references.add(class_id)
+    print(f"created node {model} for {class_id}")
+    ogm.type_cache[class_id] = model
 
     return model

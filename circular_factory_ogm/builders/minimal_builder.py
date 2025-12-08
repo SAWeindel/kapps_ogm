@@ -2,8 +2,6 @@ from typing import Type
 import pydantic as pd
 
 from graph_db_interface import IRI, SPARQLQuery, process_bindings_select
-from graph_db_interface.utils.utils import convert_query_result_to_python_type
-from graph_db_interface.utils.typemap import XSDToPythonTypes
 from aas_middleware.model.core import Identifiable
 
 from circular_factory_ogm.node import Node
@@ -40,31 +38,28 @@ def minimal_builder(node: Node) -> Type[Identifiable]:
             """
         ],
     )
-    result = db.query(query)
+    result = db.query(query, convert_bindings=True)
     for binding in result["results"]["bindings"]:
-        attr = IRI(binding["attr"]["value"])
-        field_type = binding["field"]["type"]
-        if field_type == "uri":
-            field = IRI(binding["field"]["value"])
-            if field in XSDToPythonTypes:
-                # Direct datatype field - type is python equivalent of XSD type
-                model_creation_dict[attr] = (XSDToPythonTypes[field], pd.Field())
-            else:
-                # Reference to another class - type is forward reference to model of that class
-                # OGM keeps track of class references to ensure they
-                # are built when the pydantic model is constructed
-                print(f"build added {field} to ref")
-                ogm.type_references.add(field)
-                model_creation_dict[attr] = (f"models['{field.lined}']", pd.Field())
-        elif field_type == "literal":
-            # Direct datatype field - type is python equivalent of XSD type
-            literal = convert_query_result_to_python_type(binding["field"])
-            model_creation_dict[attr] = (type(literal), literal)
+        attr_iri = binding["attr"]
+        field_entry = binding["field"]
+        if field_entry == class_id:
+            continue  # avoid self-references
+        if isinstance(field_entry, IRI):
+            print(f"build added {field_entry} to ref")
+            ogm.type_references.add(field_entry)
+            field_type = f"models['{field_entry.lined}']"
+            model_creation_dict[attr_iri] = (list[field_type], pd.Field())
+        elif isinstance(field_entry, type):
+            field_type = field_entry
+            model_creation_dict[attr_iri] = (list[field_type], pd.Field())
+        else:
+            field_type = type(field_entry)
+            model_creation_dict[attr_iri] = (list[field_type], field_entry)
 
     # find attributes attached to blank nodes
     query = SPARQLQuery()
     query.add_select_block(
-        variables=["?attr", "?sub_attr", "?field"],
+        variables=["?attr", "?attribute_node", "?sub_attr", "?field"],
         where_clauses=[
             f"""
             {class_id.n3()} ?attr ?attribute_node .
@@ -72,19 +67,38 @@ def minimal_builder(node: Node) -> Type[Identifiable]:
             ?fields_list rdf:rest*/rdf:first ?field_node .
             ?field_node a owl:Restriction ;
                 owl:onProperty ?sub_attr ;
-                owl:someValuesFrom ?field 
+                owl:someValuesFrom ?field .
+            FILTER(isBlank(?attribute_node)) .
             """
         ],
     )
-    result = db.query(query)
+    result = db.query(query, convert_bindings=True)
     attributes = process_bindings_select(
         result["results"]["bindings"],
-        variables=["sub_attr", "field"],
         grouping_variables=["attr"],
+        variables=["attribute_node", "sub_attr", "field"],
     )
-    # TODO fix loader to actually detect and support this
-    for attr_str, attr_dict in attributes.items():
-        model_creation_dict[IRI(attr_str)] = (dict, pd.Field())
+    for attr_iri, attr_fields in attributes.items():
+        attr_creation_dict = {}
+        for attr_node, attr_field_iri, field_entry in attr_fields:
+            if isinstance(field_entry, IRI):
+                print(f"build added {field_entry} to ref")
+                ogm.type_references.add(field_entry)
+                field_type = f"models['{field_entry.lined}']"
+                attr_creation_dict[attr_field_iri] = (list[field_type], pd.Field())
+            elif isinstance(field_entry, type):
+                field_type = field_entry
+                attr_creation_dict[attr_field_iri] = (list[field_type], pd.Field())
+            else:
+                field_type = type(field_entry)
+                attr_creation_dict[attr_field_iri] = (list[field_type], field_entry)
+
+        attr_model = pd.create_model(
+            attr_node,
+            __base__=pd.BaseModel,
+            **attr_creation_dict,
+        )
+        model_creation_dict[attr_iri] = (list[attr_model], pd.Field())
 
     model = pd.create_model(
         class_id.lined,

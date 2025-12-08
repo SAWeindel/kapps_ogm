@@ -16,9 +16,11 @@ from pydantic import BaseModel, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
 
 from graph_db_interface import IRI, GraphDB
+import json
 
 if TYPE_CHECKING:
     from ogm import OGM
+from typing import get_origin, get_args
 
 T = TypeVar("T", bound=BaseModel)
 Loader: TypeAlias = Callable[[IRI, GraphDB], Union[Dict[str, Any], T]]
@@ -174,7 +176,18 @@ class Node(Generic[T]):
 
         if self.data is None:
             self.data = self.ogm.loader(self)
-            self.ogm.resolve_types()
+
+        self.ogm.resolve_types()
+        for attribute, field in self.model.model_fields.items():
+            model = field.annotation
+            if attribute not in self.data or get_origin(model) is not list:
+                continue
+            model = get_args(model)[0]
+            if not issubclass(model, BaseModel):
+                continue
+            self.data[attribute] = [
+                model.model_validate(v) for v in self.data[attribute]
+            ]
         self.instance = self.model.model_validate(self.data)
 
         return self.instance

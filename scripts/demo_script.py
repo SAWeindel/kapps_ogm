@@ -10,9 +10,13 @@ from circular_factory_ogm.loaders.minimal_loader import minimal_loader
 from circular_factory_ogm.builders.minimal_builder import minimal_builder
 from circular_factory_ogm.loaders.loader_eh import loader_eh
 
-NODE_ID = IRI(
-    "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#ConveyorBelt1_left"
-)
+IRI.add_prefix("ds", "https://www.sfb1574.kit.edu/ontologies/DemoStructure")
+IRI.add_prefix("dsi", "https://www.sfb1574.kit.edu/ontologies/DemoStructureInstance")
+IRI.add_prefix("tu", "https://www.sfb1574.kit.edu/ontologies/TransferUnit")
+IRI.add_prefix("tui", "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances")
+
+NODE_ID = IRI("dsi:NodeBInstance")
+# NODE_ID = IRI("tui:ConveyorBelt1_left")
 
 
 def main():

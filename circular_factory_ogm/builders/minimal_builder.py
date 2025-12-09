@@ -45,10 +45,8 @@ def minimal_builder(node: Node) -> Type[Identifiable]:
         if field_entry == class_id:
             continue  # avoid self-references
         if isinstance(field_entry, IRI):
-            print(f"build added {field_entry} to ref")
-            ogm.type_references.add(field_entry)
-            field_type = f"models['{field_entry.lined}']"
-            model_creation_dict[attr_iri] = (list[field_type], pd.Field())
+            field_type = ogm.create_reference_type(id=field_entry)
+            model_creation_dict[attr_iri] = (field_type, pd.Field())
         elif isinstance(field_entry, type):
             field_type = field_entry
             model_creation_dict[attr_iri] = (list[field_type], pd.Field())
@@ -82,10 +80,8 @@ def minimal_builder(node: Node) -> Type[Identifiable]:
         attr_creation_dict = {}
         for attr_node, attr_field_iri, field_entry in attr_fields:
             if isinstance(field_entry, IRI):
-                print(f"build added {field_entry} to ref")
-                ogm.type_references.add(field_entry)
-                field_type = f"models['{field_entry.lined}']"
-                attr_creation_dict[attr_field_iri] = (list[field_type], pd.Field())
+                field_type = ogm.create_reference_type(id=field_entry)
+                attr_creation_dict[attr_field_iri] = (field_type, pd.Field())
             elif isinstance(field_entry, type):
                 field_type = field_entry
                 attr_creation_dict[attr_field_iri] = (list[field_type], pd.Field())
@@ -93,24 +89,15 @@ def minimal_builder(node: Node) -> Type[Identifiable]:
                 field_type = type(field_entry)
                 attr_creation_dict[attr_field_iri] = (list[field_type], field_entry)
 
-        attr_model = pd.create_model(
-            attr_node,
-            __base__=pd.BaseModel,
-            **attr_creation_dict,
+        attr_model = ogm.create_bnode_type(
+            bnode=attr_node,
+            creation_dict=attr_creation_dict,
         )
         model_creation_dict[attr_iri] = (list[attr_model], pd.Field())
 
-    model = pd.create_model(
-        class_id.lined,
-        __base__=Identifiable,
-        id=(IRI, class_id),
-        **model_creation_dict,
+    model = ogm.create_resolved_type(
+        id=class_id,
+        creation_dict=model_creation_dict,
     )
-
-    # Cache the created model in the OGM's type cache
-    print(f"build added {class_id} to ref")
-    ogm.type_references.add(class_id)
-    print(f"created node {model} for {class_id}")
-    ogm.type_cache[class_id] = model
 
     return model

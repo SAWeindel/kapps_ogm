@@ -12,7 +12,7 @@ from circular_factory_ogm.node import Node
 from circular_factory_ogm.ogm import OGM
 from circular_factory_ogm.utils.json_ogm_encoder import OGMEncoder
 
-logger = logging.getLogger("circular_factory_ogm")
+logger = logging.getLogger("cf_loader_eh")
 
 
 def resolve_bnode(

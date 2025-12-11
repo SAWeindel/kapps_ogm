@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, Optional, Type, Union
 import pydantic as pd
+import logging
+from rdflib import BNode
 
 from aas_middleware.model.core import Identifiable
 
@@ -27,6 +29,7 @@ class OGM:
         loader_func: Optional[Callable[[IRI, GraphDB], Dict[str, Any]]] = None,
         builder_func: Optional[Callable[[IRI, GraphDB], Type[pd.BaseModel]]] = None,
         expansion_blacklist: Optional[set[IRI]] = None,
+        logger: Optional[logging.Logger] = None,
     ):
         """
         Initialize the OGM.
@@ -43,6 +46,8 @@ class OGM:
         self._loader_func = loader_func or self._default_loader
         self._builder_func = builder_func or self._default_builder
         self.expansion_blacklist = expansion_blacklist or set()
+
+        self.logger = logger or logging.getLogger("cf_ogm")
 
     def _default_loader(self, node: Node) -> Dict[str, Any]:
         """
@@ -106,6 +111,41 @@ class OGM:
         """
         return self.type_cache.get(id)
 
+    def create_reference_type(self, id: IRI):
+        type_model = list[f"models['{id.lined}']"]
+        self.type_references.add(id)
+        self.logger.info(f"Created reference type for {id}")
+        return type_model
+
+    def create_resolved_type(
+        self,
+        id: IRI,
+        creation_dict: Dict[IRI, tuple[Type[list[Any]], pd.Field]],
+    ) -> Type[Identifiable]:
+        type_model = pd.create_model(
+            id.lined,
+            __base__=Identifiable,
+            id=(IRI, id),
+            **creation_dict,
+        )
+        self.type_references.add(id)
+        self.type_cache[id] = type_model
+        self.logger.info(f"Created resolved type for {id}")
+        return type_model
+
+    def create_bnode_type(
+        self,
+        bnode: BNode,
+        creation_dict: Dict[IRI, tuple[Type[list[Any]], pd.Field]],
+    ):
+        type_model = pd.create_model(
+            bnode,
+            __base__=pd.BaseModel,
+            **creation_dict,
+        )
+        self.logger.info(f"Created blank node type for {bnode}")
+        return type_model
+
     def create_node(
         self,
         model_cls: Optional[Type[pd.BaseModel]] = None,
@@ -125,6 +165,9 @@ class OGM:
         Returns:
             A new Node instance configured with this OGM's type cache and OGM reference
         """
+        if id in self.nodes:
+            self.logger.warning(f"Node with id {id} already exists. Overwriting.")
+
         node = Node[id.lined](
             model_cls=model_cls,
             id=id,
@@ -135,6 +178,7 @@ class OGM:
         )
 
         self.nodes[node.id] = node
+        self.logger.info(f"Created node for id {node.id}")
         return node
 
     def resolve_types(self):
@@ -147,15 +191,11 @@ class OGM:
         for class_iri in self.type_references:
             if class_iri in self.type_cache:
                 model = self.type_cache[class_iri]
-                print(f"found model {model} for {class_iri}")
+                self.logger.info(f"Resolve Types: Found model for {class_iri}")
             else:
-                model = pd.create_model(
-                    class_iri.lined,
-                    __base__=Identifiable,
-                    id=(IRI, class_iri),
-                )
-                self.type_cache[class_iri] = model
-                print(f"created ref node {model} for {class_iri}")
+                # Referenced node has not been built yet, create an empty reference type
+                self.logger.info(f"Resolve Types: Did not find model for {class_iri}")
+                model = self.create_resolved_type(id=class_iri, creation_dict={})
             models[class_iri.lined] = model
 
         for model in models.values():

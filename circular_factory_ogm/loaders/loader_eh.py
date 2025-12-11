@@ -70,17 +70,17 @@ def loader_eh(node: Node) -> Dict[IRI, Any]:
     result["id"] = id
 
     # Collect objects per predicate preserving multiplicity
-    for _, predicate, object in triples:
+    for _, pred, obj in triples:
 
-        logger.debug("Processing object for %s -> %s", predicate, object)
-        if isinstance(object, BNode):
+        logger.debug("Processing object for %s -> %s", pred, obj)
+        if isinstance(obj, BNode):
             # expand the blank node into its properties dict
-            object = resolve_bnode(id, predicate, db, blacklist, ogm)
-        elif isinstance(object, IRI):
+            obj = resolve_bnode(id, pred, db, blacklist, ogm)
+        elif isinstance(obj, IRI):
             # Create a Node for the referenced IRI and load it so it becomes persisted
-            object = ogm.create_node(id=object)
+            obj = ogm.create_node(id=obj)
 
-        result[predicate].append(object)
+        result[pred].append(obj)
 
     # Pretty-print the result for logging
     try:

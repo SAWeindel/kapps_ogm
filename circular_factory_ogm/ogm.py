@@ -41,8 +41,7 @@ class OGM:
         """
         self.db = db
         self.nodes: Dict[IRI, Node] = {}
-        self.type_references: set[IRI] = set()
-        self.type_cache: Dict[IRI, Type[pd.BaseModel]] = {}
+        self.type_cache: Dict[IRI, Type[Identifiable]] = {}
         self._loader_func = loader_func or self._default_loader
         self._builder_func = builder_func or self._default_builder
         self.expansion_blacklist = expansion_blacklist or set()
@@ -111,41 +110,6 @@ class OGM:
         """
         return self.type_cache.get(id)
 
-    def create_reference_type(self, id: IRI):
-        type_model = list[f"models['{id.lined}']"]
-        self.type_references.add(id)
-        self.logger.info(f"Created reference type for {id}")
-        return type_model
-
-    def create_resolved_type(
-        self,
-        id: IRI,
-        creation_dict: Dict[IRI, tuple[Type[list[Any]], pd.Field]],
-    ) -> Type[Identifiable]:
-        type_model = pd.create_model(
-            id.lined,
-            __base__=Identifiable,
-            id=(IRI, id),
-            **creation_dict,
-        )
-        self.type_references.add(id)
-        self.type_cache[id] = type_model
-        self.logger.info(f"Created resolved type for {id}")
-        return type_model
-
-    def create_bnode_type(
-        self,
-        bnode: BNode,
-        creation_dict: Dict[IRI, tuple[Type[list[Any]], pd.Field]],
-    ):
-        type_model = pd.create_model(
-            bnode,
-            __base__=pd.BaseModel,
-            **creation_dict,
-        )
-        self.logger.info(f"Created blank node type for {bnode}")
-        return type_model
-
     def create_node(
         self,
         model_cls: Optional[Type[pd.BaseModel]] = None,
@@ -173,30 +137,99 @@ class OGM:
             id=id,
             data=data,
             instance=instance,
-            type_cache=self.type_cache,
             ogm=self,
         )
-
         self.nodes[node.id] = node
+
         self.logger.info(f"Created node for id {node.id}")
         return node
 
-    def resolve_types(self):
+    def create_node_type(
+        self,
+        id: IRI,
+        creation_dict: Dict[IRI, tuple[Type[list[Any]], pd.Field]],
+    ) -> Type[Identifiable]:
+        if not id in self.nodes:
+            self.create_node(id=id)
+
+        type_model = pd.create_model(
+            id.lined,
+            __base__=Identifiable,
+            id=(IRI, id),
+            **creation_dict,
+        )
+        self.type_cache[id] = type_model
+
+        self.logger.info(f"Created type for node {id}")
+        return type_model
+
+    def create_bnode_type(
+        self,
+        bnode: BNode,
+        creation_dict: Dict[IRI, tuple[Type[list[pd.BaseModel]], pd.Field]],
+    ) -> Type[pd.BaseModel]:
+        type_model = pd.create_model(
+            bnode,
+            __base__=pd.BaseModel,
+            **creation_dict,
+        )
+
+        self.logger.info(f"Created type for bnode {bnode}")
+        return type_model
+
+    def create_node_instance(
+        self,
+        node: Node,
+    ) -> pd.BaseModel:
+        """
+        Create a Pydantic model instance for the given Node.
+
+        Args:
+            node: The Node to create an instance for
+        """
+        models = self.resolve_references()
+        model = models[node.id]
+        data = node.data or {"id": node.id}
+        return model.model_validate(data)
+
+    def get_reference_to(
+        self,
+        id: IRI,
+    ) -> Type[Identifiable]:
+        if not id in self.nodes:
+            self.create_node(id=id)
+
+        type_model = f"reference_dict['{id.lined}']"
+
+        self.logger.info(f"Created reference for node {id}")
+        return type_model
+
+    def resolve_references(self) -> dict[IRI, Type[pd.BaseModel]]:
         """
         For all referenced types collected during building, ensure their model
         classes exist in the type cache or are created as reference nodes.
         Resolves all forward references.
+
+        Returns:
+            A dictionary of IRI to resolved Pydantic model classes. This consists of
+            the types in the type cache as well as any newly created reference types.
         """
-        models = {}
-        for class_iri in self.type_references:
+        models: dict[IRI, Type[Identifiable]] = {}
+        reference_dict: dict[str, Type[Identifiable]] = {}
+
+        for class_iri in self.nodes.keys():
             if class_iri in self.type_cache:
                 model = self.type_cache[class_iri]
-                self.logger.info(f"Resolve Types: Found model for {class_iri}")
+                self.logger.info(f"Found model for reference id {class_iri}")
             else:
                 # Referenced node has not been built yet, create an empty reference type
-                self.logger.info(f"Resolve Types: Did not find model for {class_iri}")
-                model = self.create_resolved_type(id=class_iri, creation_dict={})
-            models[class_iri.lined] = model
+                self.logger.info(f"Did not find model for reference id {class_iri}")
+                model = self.create_node_type(id=class_iri, creation_dict={})
 
-        for model in models.values():
+            models[class_iri] = model
+            reference_dict[class_iri.lined] = model
+
+        for model in reference_dict.values():
             model.model_rebuild()
+
+        return models

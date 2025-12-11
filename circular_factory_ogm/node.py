@@ -10,17 +10,14 @@ from typing import (
     TypeVar,
     Union,
     TypeAlias,
-    ForwardRef,
 )
 from pydantic import BaseModel, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
 
 from graph_db_interface import IRI, GraphDB
-import json
 
 if TYPE_CHECKING:
     from ogm import OGM
-from typing import get_origin, get_args
 
 T = TypeVar("T", bound=BaseModel)
 Loader: TypeAlias = Callable[[IRI, GraphDB], Union[Dict[str, Any], T]]
@@ -49,7 +46,6 @@ class Node(Generic[T]):
         id: Optional[Union[str, IRI]] = None,
         data: Optional[Dict[str, Any]] = None,
         instance: Optional[T] = None,
-        type_cache: Optional[Dict[IRI, Type[BaseModel]]] = None,
         ogm: Optional[OGM] = None,
     ):
         """
@@ -60,7 +56,6 @@ class Node(Generic[T]):
             id: Optional IRI of the RDF resource
             data: Optional partial data dict for the model
             instance: Optional already-loaded Pydantic model instance
-            type_cache: Optional type cache to look up model classes by URI
             ogm: Optional OGM instance for builder and loader functions
 
         Raises:
@@ -106,9 +101,6 @@ class Node(Generic[T]):
         elif instance is not None:
             self.model = type(instance)
             self.id = instance.id
-        elif type_cache and id in type_cache:
-            self.model = type_cache[id]
-            self.id = id
         elif ogm and id in ogm.type_cache:
             self.model = ogm.type_cache[id]
             self.id = id
@@ -139,9 +131,6 @@ class Node(Generic[T]):
         if self.model is not None:
             return self.model
 
-        if self.id is None:
-            raise ValueError("Cannot build model class without a URI")
-
         if self.ogm is None:
             raise NotImplementedError(
                 "Dynamic model building not yet implemented. "
@@ -154,9 +143,9 @@ class Node(Generic[T]):
 
     def load(self) -> T:
         """
-        Synchronously load the referenced object using the loader callable.
+        Synchronously load the referenced object using the loader callable, generating an instance.
 
-        The loader is called as loader(id) and must return either a dict or an instance.
+        The loader is called as loader(id) and must return a dict matching the object type.
         If already loaded, returns the cached instance without calling the loader.
 
         Args:
@@ -171,25 +160,10 @@ class Node(Generic[T]):
         if self.instance is not None:
             return self.instance
 
-        if self.model is None:
-            self.build()
-
         if self.data is None:
             self.data = self.ogm.loader(self)
 
-        self.ogm.resolve_types()
-        for attribute, field in self.model.model_fields.items():
-            model = field.annotation
-            if attribute not in self.data or get_origin(model) is not list:
-                continue
-            model = get_args(model)[0]
-            if not issubclass(model, BaseModel):
-                continue
-            self.data[attribute] = [
-                model.model_validate(v) for v in self.data[attribute]
-            ]
-        self.instance = self.model.model_validate(self.data)
-
+        self.instance = self.ogm.create_node_instance(self)
         return self.instance
 
     def try_load(self, loader: Loader, default: Optional[T] = None) -> Optional[T]:
@@ -197,7 +171,7 @@ class Node(Generic[T]):
         Like load but returns default instead of raising on error.
 
         Args:
-            loader: Callable that takes a IRI and returns dict or model instance
+            loader: Callable that takes a IRI and returns dict matching the object type
             default: Value to return if loading fails
 
         Returns:

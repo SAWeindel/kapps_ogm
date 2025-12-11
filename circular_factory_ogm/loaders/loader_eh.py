@@ -70,28 +70,27 @@ def loader_eh(node: Node) -> Dict[IRI, Any]:
     result["id"] = id
 
     # Collect objects per predicate preserving multiplicity
-    for _, attribute, field in triples:
+    for _, predicate, object in triples:
 
-        logger.debug("Processing object for %s -> %s", attribute, field)
-        if isinstance(field, BNode):
+        logger.debug("Processing object for %s -> %s", predicate, object)
+        if isinstance(object, BNode):
             # expand the blank node into its properties dict
-            field = resolve_bnode(id, attribute, db, blacklist, ogm)
-        elif isinstance(field, IRI):
+            object = resolve_bnode(id, predicate, db, blacklist, ogm)
+        elif isinstance(object, IRI):
             # Create a Node for the referenced IRI and load it so it becomes persisted
-            field = ogm.create_node(id=field)
+            object = ogm.create_node(id=object)
 
-        result[attribute].append(field)
+        result[predicate].append(object)
 
     # Pretty-print the result for logging
     try:
-        pretty = shorten_block(
-            json.dumps(
-                result,
-                indent=2,
-                ensure_ascii=False,
-                cls=OGMEncoder,
-            )
+        pretty = json.dumps(
+            result,
+            indent=2,
+            ensure_ascii=False,
+            cls=OGMEncoder,
         )
+
     except Exception:
         from pprint import pformat
 

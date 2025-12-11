@@ -15,8 +15,8 @@ IRI.add_prefix("dsi", "https://www.sfb1574.kit.edu/ontologies/DemoStructureInsta
 IRI.add_prefix("tu", "https://www.sfb1574.kit.edu/ontologies/TransferUnit")
 IRI.add_prefix("tui", "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances")
 
-NODE_ID = IRI("dsi:NodeBInstance")
-# NODE_ID = IRI("tui:ConveyorBelt1_left")
+#NODE_ID = IRI("dsi:NodeBInstance")
+NODE_ID = IRI("tui:ConveyorBelt1_left")
 
 
 def main():

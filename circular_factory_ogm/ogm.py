@@ -155,7 +155,7 @@ class OGM:
         type_model = pd.create_model(
             id.lined,
             __base__=Identifiable,
-            id=(IRI, id),
+            id=(IRI, pd.Field()),
             **creation_dict,
         )
         self.type_cache[id] = type_model

@@ -16,7 +16,7 @@ logger = logging.getLogger("cf_loader_eh")
 
 
 def resolve_bnode(
-    subj: IRI, pred: IRI, db: GraphDB, blacklist: set, ogm: OGM
+    subj: IRI, pred: IRI, db: GraphDB, expansion_handler: Dict[IRI, Any], ogm: OGM
 ) -> Dict[IRI, Any]:
     """
     Helper function to handle blank nodes (BNodes) if needed.
@@ -34,11 +34,12 @@ def resolve_bnode(
         attribute = result["attribute"]
         field = result["field"]
 
-        if attribute in blacklist:
-            continue
-
+        # Check if there's a custom handler for this attribute
+        if attribute in expansion_handler:
+            handler = expansion_handler[attribute]
+            value = handler(field, ogm)
         # determine value according to result type
-        if isinstance(field, IRI) and db.owl_is_named_individual(iri=field):
+        elif isinstance(field, IRI) and db.owl_is_named_individual(iri=field):
             value = ogm.create_node(id=field)
         else:
             value = field
@@ -46,6 +47,18 @@ def resolve_bnode(
         bnode_data[attribute].append(value)
 
     return bnode_data
+
+def resolve_rdf_type(subj: IRI, db:GraphDB, ogm: OGM) -> Any:
+    query = SPARQLQuery(include_implicit=True)
+    where_clauses = [
+        f"{subj.n3()} a ?directClass .",
+        "?directClass rdfs:subClassOf* ?anyClass .",
+        "BIND(?anyClass AS ?superClass) .",
+        "FILTER(?superClass != ?directClass) .",
+    ]
+    query.add_select_block(variables= ["?directClass", "?superClass"], where_clauses=where_clauses,select_type= SELECT_DISTINCT)
+    
+    
 
 
 def loader_eh(node: Node) -> Dict[IRI, Any]:
@@ -59,7 +72,7 @@ def loader_eh(node: Node) -> Dict[IRI, Any]:
     id = node.id
     ogm = node.ogm
     db = ogm.db
-    blacklist = ogm.expansion_blacklist
+    expansion_handler = ogm.expansion_handler
 
     # Fetch triples for the subject
     triples = db.triples_get(sub=id)
@@ -73,9 +86,14 @@ def loader_eh(node: Node) -> Dict[IRI, Any]:
     for _, pred, obj in triples:
 
         logger.debug("Processing object for %s -> %s", pred, obj)
-        if isinstance(obj, BNode):
+        
+        # Check if there's a custom handler for this predicate
+        if pred in expansion_handler:
+            handler = expansion_handler[pred]
+            obj = handler(obj, ogm)
+        elif isinstance(obj, BNode):
             # expand the blank node into its properties dict
-            obj = resolve_bnode(id, pred, db, blacklist, ogm)
+            obj = resolve_bnode(id, pred, db, expansion_handler=expansion_handler, ogm=ogm)
         elif isinstance(obj, IRI):
             # Create a Node for the referenced IRI and load it so it becomes persisted
             obj = ogm.create_node(id=obj)

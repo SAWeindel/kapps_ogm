@@ -4,6 +4,7 @@ from typing import Any, Callable, Dict, Optional, Type, Union
 import pydantic as pd
 import logging
 from rdflib import BNode
+from .utils import fundamentals_expansion
 
 from aas_middleware.model.core import Identifiable
 
@@ -23,12 +24,16 @@ class OGM:
     - Builder function for dynamic model generation
     """
 
+    DEFAULT_EXPANSION_HANDLER: Dict[IRI, Callable] = {
+        IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"): fundamentals_expansion.resolve_rdf_type
+    } 
+
     def __init__(
         self,
         db: GraphDB,
         loader_func: Optional[Callable[[IRI, GraphDB], Dict[str, Any]]] = None,
         builder_func: Optional[Callable[[IRI, GraphDB], Type[pd.BaseModel]]] = None,
-        expansion_blacklist: Optional[set[IRI]] = None,
+        expansion_handler: Optional[Dict[IRI, Callable]] = None,
         logger: Optional[logging.Logger] = None,
     ):
         """
@@ -44,7 +49,7 @@ class OGM:
         self.type_cache: Dict[IRI, Type[Identifiable]] = {}
         self._loader_func = loader_func or self._default_loader
         self._builder_func = builder_func or self._default_builder
-        self.expansion_blacklist = expansion_blacklist or set()
+        self.expansion_handler = expansion_handler or self.DEFAULT_EXPANSION_HANDLER
 
         self.logger = logger or logging.getLogger("cf_ogm")
 

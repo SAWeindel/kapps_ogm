@@ -48,17 +48,17 @@ def resolve_bnode(
 
     return bnode_data
 
-def resolve_rdf_type(subj: IRI, db:GraphDB, ogm: OGM) -> Any:
-    query = SPARQLQuery(include_implicit=True)
-    where_clauses = [
-        f"{subj.n3()} a ?directClass .",
-        "?directClass rdfs:subClassOf* ?anyClass .",
-        "BIND(?anyClass AS ?superClass) .",
-        "FILTER(?superClass != ?directClass) .",
-    ]
-    query.add_select_block(variables= ["?directClass", "?superClass"], where_clauses=where_clauses,select_type= SELECT_DISTINCT)
+
+def resolve_rdf_type(node: Node, db: GraphDB, ogm: OGM) -> Any:
+    subj = node.id
+    result = db.triples_get(
+        sub=subj, pred=IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+    )
+    types = [obj for _, _, obj in result]
+    for t in types:
+        logger.debug("Found rdf:type %s for subject %s", t, subj)
     
-    
+        
 
 
 def loader_eh(node: Node) -> Dict[IRI, Any]:
@@ -72,13 +72,15 @@ def loader_eh(node: Node) -> Dict[IRI, Any]:
     id = node.id
     ogm = node.ogm
     db = ogm.db
-    expansion_handler = ogm.expansion_handler
+    # expansion_handler = ogm.expansion_handler
+    resolve_rdf_type(id, db, ogm)
 
     # Fetch triples for the subject
     triples = db.triples_get(sub=id)
 
     # Start result with stringified id
     result: Dict[IRI, list[Any]] = defaultdict(list)
+    
 
     result["id"] = id
 
@@ -86,14 +88,16 @@ def loader_eh(node: Node) -> Dict[IRI, Any]:
     for _, pred, obj in triples:
 
         logger.debug("Processing object for %s -> %s", pred, obj)
-        
+
         # Check if there's a custom handler for this predicate
         if pred in expansion_handler:
             handler = expansion_handler[pred]
             obj = handler(obj, ogm)
         elif isinstance(obj, BNode):
             # expand the blank node into its properties dict
-            obj = resolve_bnode(id, pred, db, expansion_handler=expansion_handler, ogm=ogm)
+            obj = resolve_bnode(
+                id, pred, db, expansion_handler=expansion_handler, ogm=ogm
+            )
         elif isinstance(obj, IRI):
             # Create a Node for the referenced IRI and load it so it becomes persisted
             obj = ogm.create_node(id=obj)

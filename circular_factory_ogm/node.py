@@ -13,6 +13,7 @@ from typing import (
 )
 from pydantic import BaseModel, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
+from circular_factory_ogm.utils.constants import FUNDAMENTAL_CONCEPTS as fc
 
 from graph_db_interface import IRI, GraphDB
 
@@ -43,6 +44,7 @@ class Node(Generic[T]):
     def __init__(
         self,
         model_cls: Optional[Type[T]] = None,
+        model_data: Optional[Dict[str, Any]] = None,
         id: Optional[Union[str, IRI]] = None,
         data: Optional[Dict[str, Any]] = None,
         instance: Optional[T] = None,
@@ -88,6 +90,7 @@ class Node(Generic[T]):
         self.data = data or None
         self.instance: Optional[T] = instance
         self.ogm = ogm
+        self.model_data = model_data or {}
 
         # Assign model class and id
         # 1. If model_cls is provided, use it
@@ -181,6 +184,30 @@ class Node(Generic[T]):
             return self.load(loader)
         except Exception:
             return default
+        
+    def add_rdf_type(self, iri: IRI) -> None:
+        """
+        Add an RDF type to the model data.
+
+        Args:
+            iri: The IRI of the RDF type to add
+        """
+        
+        if fc["RDF_TYPE"] not in self.model_data:
+            self.model_data[fc["RDF_TYPE"]] = []
+        if iri not in self.model_data[fc["RDF_TYPE"]]:
+            self.model_data[fc["RDF_TYPE"]].append(iri)
+    def add_rdfs_label(self, label: str) -> None:
+        """
+        Add an RDFS label to the model data.
+
+        Args:
+            label: The label string to add
+        """
+        if fc["RDFS_LABEL"] not in self.model_data:
+            self.model_data[fc["RDFS_LABEL"]] = []
+        if label not in self.model_data[fc["RDFS_LABEL"]]:
+            self.model_data[fc["RDFS_LABEL"]].append(label)
 
     def __repr__(self) -> str:
         if self.instance:

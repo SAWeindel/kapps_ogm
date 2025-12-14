@@ -1,3 +1,5 @@
+
+import logging
 from graph_db_interface import IRI, GraphDB
 from circular_factory_ogm.utils.constants import FUNDAMENTAL_CONCEPTS as fc
 from typing import Type, Any
@@ -15,6 +17,9 @@ def toPythonType(iri: IRI, db: GraphDB) -> Type[Any]:
         The corresponding Python type
     """
     # Map common XSD datatypes to Python types
+    logging.warning(
+        f"Warning: TODO: The datatype {iri} has not been fully checked for OWL datatype definitions yet. Defaulting to basic type mapping."
+    )
     datatype_mapping = {
         "http://www.w3.org/2001/XMLSchema#string": str,
         "http://www.w3.org/2001/XMLSchema#integer": int,

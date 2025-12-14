@@ -1,41 +1,95 @@
-from typing import Optional, Type, Any, Dict
+from typing import Optional, Type, Any, Dict, List, TYPE_CHECKING
 from dataclasses import dataclass, field
-from graph_db_interface import IRI
-from circular_factory_ogm.utils.pretty_print import class_spec_to_string
-from circular_factory_ogm.builders.mapping.property_spec import PropertySpec
-from circular_factory_ogm.node import Node
-from circular_factory_ogm.utils.constants import (
+from graph_db_interface import IRI, SPARQLQuery
+from graph_db_interface.utils.processing import process_bindings_select
+import logging
+from .property_spec import process_literal_property, process_class_property, process_complex_property
+
+from ...utils.constants import (
     FUNDAMENTAL_CONCEPTS as fc,
     PROPERTY_TYPES,
     PROPERTY_CHARACTERISTICS,
 )
-from graph_db_interface import SPARQLQuery
-from graph_db_interface.utils.processing import process_bindings_select
-import logging
 
-# If you use logger.warning, define logger or use logging.warning directly
+if TYPE_CHECKING:
+    from .property_spec import PropertySpec
+    from ...ogm import OGM
+    from ...node import Node
+    from ...utils.pretty_print import class_spec_to_string
+
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class ClassSpec:
-    iri: IRI
+    iri: Optional[IRI]
     label: Optional[str] = None
     properties: Dict[IRI, "PropertySpec"] = field(default_factory=dict)
+    types: List[IRI] = field(default_factory=list)
+    superclasses: List[IRI] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_string(self) -> str:
+        from ...utils.pretty_print import class_spec_to_string
+
         return class_spec_to_string(self)
 
 
+def specify(class_iri: IRI, ogm: "OGM") -> ClassSpec:
+    """
+    create a ClassSpec for the given IRI by analyzing its RDF data in the GraphDB via the OGM instance.
+
+        Args:
+            iri: The IRI of the class to specify
+            ogm: The OGM instance with access to the GraphDB
+        Returns:
+            A ClassSpec instance representing the class specification"""
+    db = ogm.db
+
+    # first we get all types of the class
+    triples = db.triples_get(sub=class_iri, pred=fc["RDF_TYPE"], include_implicit=True)
+    class_types = [triple[2] for triple in triples]
+    if fc["OWL_CLASS"] not in class_types and fc["RDFS_CLASS"] not in class_types:
+        raise ValueError(f"IRI {class_iri} is not an OWL/RDFS Class.")
+
+    class_spec = ClassSpec(iri=class_iri)
+    class_spec.types = class_types
+
+    label_triples = db.triples_get(
+        sub=class_iri, pred=fc["RDFS_LABEL"], include_implicit=True
+    )
+    if label_triples:
+        class_spec.label = str(label_triples[0][2])
+
+    superclasses = [
+        triple[2]
+        for triple in db.triples_get(
+            sub=class_iri, pred=fc["RDFS_SUBCLASS_OF"], include_implicit=True
+        )
+    ]
+    if class_iri in superclasses:
+        superclasses.remove(class_iri)
+    else:
+        logger.warning(
+            f"{class_iri} should be implicitely a subclass of itself but is not found in rdfs:subClassOf."
+        )
+    if superclasses:
+        class_spec.superclasses = superclasses
+
+    class_spec.properties = classify_outgoing_properties(class_iri, ogm)
+
+    print(f"Specifying class {class_iri} as {class_spec.to_string()}")
+
+    return class_spec
+
+
 def classify_direct_predicates(
-    node: Node,
+    node: "Node",
 ):
     sub = node.id
     ogm = node.ogm
     db = ogm.db
     rdf_type = fc["RDF_TYPE"]
-    rdfs_subclassof = fc["RDFS_SUBCLASSOF"]
     owl_class = fc["OWL_CLASS"]
 
     query = SPARQLQuery(include_implicit=False)
@@ -90,22 +144,17 @@ def classify_direct_predicates(
 
 
 def classify_outgoing_properties(
-    node: Node,
-    iri: Optional[IRI] = None,
-):
-    domain = iri if iri is not None else node.id
-    ogm = node.ogm
+    class_iri: IRI, ogm: "OGM"
+) -> dict[IRI, "PropertySpec"]:
     db = ogm.db
 
-    query = SPARQLQuery(include_implicit=True)
-    where_clauses = [
-        f"?property <{fc['RDFS_DOMAIN']}> <{domain}> .",
-    ]
-    query.add_select_block(variables=["?property"], where_clauses=where_clauses)
-    result = db.query(query.to_string())
     properties = [
-        IRI(binding["property"]["value"]) for binding in result["results"]["bindings"]
+        triple[0]
+        for triple in db.triples_get(
+            pred=fc["RDFS_DOMAIN"], obj=class_iri, include_implicit=True
+        )
     ]
+    property_spec_dict: dict[IRI, PropertySpec] = {}
     for prop in properties:
         ### first we categorize the property regarding its type and characteristics
         # query for property type
@@ -147,7 +196,7 @@ def classify_outgoing_properties(
         }}
         """
 
-        query_result = node.ogm.db.query(sparql_query)
+        query_result = db.query(sparql_query)
         range_types = [
             binding["rangeType"]["value"]
             for binding in query_result["results"]["bindings"]
@@ -157,11 +206,11 @@ def classify_outgoing_properties(
         if range_types:
             match range_types[0]:
                 case "literal":
-                    property_spec = process_literal_property(node.ogm, prop)
+                    property_spec = process_literal_property(ogm, prop)
                 case "class":
-                    property_spec = process_class_property(node.ogm, prop)
+                    property_spec = process_class_property(ogm, prop)
                 case "complex":
-                    property_spec = process_complex_property(node.ogm, prop)
+                    property_spec = process_complex_property(ogm, prop)
                 case _:
                     logging.warning(f"Unknown range type for property {prop}")
 
@@ -170,7 +219,8 @@ def classify_outgoing_properties(
             property_spec.max_count = 1
 
         if property_spec:
-            print(f"Processed property {prop}: {property_spec}")
-            node.model_data[prop] = property_spec
+            print(f"Processed property {prop}: {property_spec.to_string()}")
+            property_spec_dict[prop] = property_spec
 
-    print(f"Final model data properties: {node.model_data}")
+    print(f"Final model data properties: {property_spec_dict}")
+    return property_spec_dict

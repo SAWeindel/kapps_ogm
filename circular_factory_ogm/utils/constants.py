@@ -2,12 +2,14 @@ from graph_db_interface import IRI
 
 FUNDAMENTAL_CONCEPTS = {
     "RDF_TYPE": IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
-    "RDFS_SUBCLASSOF": IRI("http://www.w3.org/2000/01/rdf-schema#subClassOf"),
+    "RDFS_SUBCLASS_OF": IRI("http://www.w3.org/2000/01/rdf-schema#subClassOf"),
     "OWL_CLASS": IRI("http://www.w3.org/2002/07/owl#Class"),
+    "RDFS_CLASS": IRI("http://www.w3.org/2000/01/rdf-schema#Class"),
     "RDFS_DOMAIN": IRI("http://www.w3.org/2000/01/rdf-schema#domain"),
     "RDFS_RANGE": IRI("http://www.w3.org/2000/01/rdf-schema#range"),
     "RDFS_LABEL": IRI("http://www.w3.org/2000/01/rdf-schema#label"),
     "RDFS_DATATYPE": IRI("http://www.w3.org/2000/01/rdf-schema#Datatype"),
+    "RDF_TYPE_VALUE": IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
 }
 
 PROPERTY_TYPES = {

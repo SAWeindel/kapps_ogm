@@ -13,12 +13,12 @@ from typing import (
 )
 from pydantic import BaseModel, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
-from circular_factory_ogm.utils.constants import FUNDAMENTAL_CONCEPTS as fc
-
 from graph_db_interface import IRI, GraphDB
 
+from .utils.constants import FUNDAMENTAL_CONCEPTS as fc
+
 if TYPE_CHECKING:
-    from ogm import OGM
+    from .ogm import OGM
 
 T = TypeVar("T", bound=BaseModel)
 Loader: TypeAlias = Callable[[IRI, GraphDB], Union[Dict[str, Any], T]]
@@ -184,7 +184,7 @@ class Node(Generic[T]):
             return self.load(loader)
         except Exception:
             return default
-        
+
     def add_rdf_type(self, iri: IRI) -> None:
         """
         Add an RDF type to the model data.
@@ -192,11 +192,12 @@ class Node(Generic[T]):
         Args:
             iri: The IRI of the RDF type to add
         """
-        
+
         if fc["RDF_TYPE"] not in self.model_data:
             self.model_data[fc["RDF_TYPE"]] = []
         if iri not in self.model_data[fc["RDF_TYPE"]]:
             self.model_data[fc["RDF_TYPE"]].append(iri)
+
     def add_rdfs_label(self, label: str) -> None:
         """
         Add an RDFS label to the model data.

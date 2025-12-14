@@ -1,9 +1,14 @@
 import json
-from circular_factory_ogm.node import Node
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..node import Node
 
 
 class OGMEncoder(json.JSONEncoder):
     def default(self, obj):
+        from ..node import Node
+
         if isinstance(obj, Node):
             if obj.is_loaded:
                 return {

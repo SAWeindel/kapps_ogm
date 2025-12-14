@@ -1,15 +1,18 @@
-from typing import Optional, Type
+from typing import Optional, Type, TYPE_CHECKING
 from dataclasses import dataclass
 from graph_db_interface import IRI
-from circular_factory_ogm.builders.mapping.class_spec import ClassSpec
-from circular_factory_ogm.utils.pretty_print import property_spec_to_string
-from circular_factory_ogm.ogm import OGM
-from circular_factory_ogm.utils.constants import FUNDAMENTAL_CONCEPTS as fc
-from circular_factory_ogm.utils.type_conversion import toPythonType
 import logging
 
-# If you use logger.warning, define logger or use logging.warning directly
+from ...utils.constants import FUNDAMENTAL_CONCEPTS as fc
+from ...utils.type_conversion import toPythonType
+
+if TYPE_CHECKING:
+    from .class_spec import ClassSpec
+    from ...ogm import OGM
+    from ...utils.pretty_print import property_spec_to_string
+
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class PropertySpec:
@@ -19,12 +22,15 @@ class PropertySpec:
     required: bool = False
     min_count: Optional[int] = None
     max_count: Optional[int] = None
-    nested: Optional[ClassSpec] = None
+    nested: Optional["ClassSpec"] = None  # Use string annotation
 
     def to_string(self) -> str:
+        from ...utils.pretty_print import property_spec_to_string
+
         return property_spec_to_string(self)
-    
-def process_literal_property(ogm: OGM, prop: IRI) -> PropertySpec:
+
+
+def process_literal_property(ogm: "OGM", prop: IRI) -> PropertySpec:
     triples = ogm.db.triples_get(sub=prop, pred=fc["RDFS_RANGE"], include_implicit=True)
     range_iris = [triple[2] for triple in triples]
     if len(range_iris) > 1:
@@ -49,7 +55,10 @@ def process_literal_property(ogm: OGM, prop: IRI) -> PropertySpec:
     )
     return property_spec
 
-def process_class_property(ogm: OGM, prop: IRI) -> PropertySpec:
+
+def process_class_property(ogm: "OGM", prop: IRI) -> PropertySpec:
+    from .class_spec import ClassSpec
+
     triples = ogm.db.triples_get(sub=prop, pred=fc["RDFS_RANGE"], include_implicit=True)
     range_iris = [triple[2] for triple in triples]
     if len(range_iris) > 1:
@@ -70,11 +79,14 @@ def process_class_property(ogm: OGM, prop: IRI) -> PropertySpec:
     )
     return property_spec
 
-def process_complex_property(ogm: OGM, prop: IRI) -> PropertySpec:
+
+def process_complex_property(ogm: "OGM", prop: IRI) -> PropertySpec:
     """
     Processes a complex OWL property and returns a PropertySpec with a nested ClassSpec
     that includes intersection, union, complement, and enumerated restrictions.
     """
+    from .class_spec import ClassSpec
+
     # Initialize top-level PropertySpec
     property_spec = PropertySpec(
         iri=prop,

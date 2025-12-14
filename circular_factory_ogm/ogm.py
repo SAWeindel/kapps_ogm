@@ -4,16 +4,14 @@ from typing import Any, Callable, Dict, Optional, Type, Union
 import pydantic as pd
 import logging
 from rdflib import BNode
-from circular_factory_ogm.builders.mapping.class_spec import (
+from aas_middleware.model.core import Identifiable
+from graph_db_interface import GraphDB, IRI
+
+from .builders.mapping.class_spec import (
     classify_direct_predicates,
     classify_outgoing_properties,
 )
-
-from aas_middleware.model.core import Identifiable
-
-from graph_db_interface import GraphDB, IRI
-
-from circular_factory_ogm.node import Node
+from .node import Node
 
 
 class OGM:

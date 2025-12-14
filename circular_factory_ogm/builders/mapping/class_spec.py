@@ -1,9 +1,14 @@
 from typing import Optional, Type, Any, Dict, List, TYPE_CHECKING
 from dataclasses import dataclass, field
+import logging
+import pydantic as pd
 from graph_db_interface import IRI, SPARQLQuery
 from graph_db_interface.utils.processing import process_bindings_select
-import logging
-from .property_spec import process_literal_property, process_class_property, process_complex_property
+from .property_spec import (
+    process_literal_property,
+    process_class_property,
+    process_complex_property,
+)
 
 from ...utils.constants import (
     FUNDAMENTAL_CONCEPTS as fc,
@@ -34,8 +39,8 @@ class ClassSpec:
         from ...utils.pretty_print import class_spec_to_string
 
         return class_spec_to_string(self)
-    
-    def hydrate(self, ogm:"OGM") -> "ClassSpec":
+
+    def hydrate(self, ogm: "OGM") -> "ClassSpec":
         """
         Populate this ClassSpec with all details from the ontology.
         Uses `specify` internally and updates this instance in place.
@@ -43,7 +48,7 @@ class ClassSpec:
         """
         if not self.iri:
             raise ValueError("Cannot hydrate ClassSpec without an IRI.")
-        
+
         hydrated_spec = specify(self.iri, ogm)
         self.label = hydrated_spec.label
         self.properties = hydrated_spec.properties
@@ -52,11 +57,32 @@ class ClassSpec:
         self.metadata = hydrated_spec.metadata
         self._hydrated = True
         return self
-    
-    
+
+    def to_pydantic_model(self) -> Type[pd.BaseModel]:
+        """
+        Convert ClassSpec into a Pydantic model using PropertySpec.to_pydantic_field().
+        """
+        fields: Dict[str, tuple[Any, Any]] = {}
+        iri_field_map: Dict[str, str] = {}
+        for prop_iri, prop_spec in self.properties.items():
+            # Use sanitized IRI token (lined) for field names to satisfy Pydantic
+            field_name = getattr(prop_iri, "lined", None) or str(prop_iri).replace("/", "_").replace("#", "_")
+            fields[field_name] = prop_spec.to_pydantic_field()
+            iri_field_map[field_name] = str(prop_iri)
+        # Use sanitized IRI token (lined) for model name as well
+        model_name = getattr(self.iri, "lined", None) or str(self.iri).replace("/", "_").replace("#", "_")
+        model_cls = pd.create_model(model_name, __base__=pd.BaseModel, **fields)  # type: ignore[arg-type]
+        # Attach mapping from sanitized field names to full IRIs for downstream use
+        setattr(model_cls, "_iri_fields", iri_field_map)
+        setattr(model_cls, "_iri_model_name", str(self.iri))
+        return model_cls
 
 
-def specify(class_iri: IRI, ogm: "OGM") -> ClassSpec:
+def specify(
+    class_iri: IRI,
+    ogm: "OGM",
+    property_chain: Optional[list[IRI]] = None,
+) -> ClassSpec:
     """
     create a ClassSpec for the given IRI by analyzing its RDF data in the GraphDB via the OGM instance.
 
@@ -97,71 +123,21 @@ def specify(class_iri: IRI, ogm: "OGM") -> ClassSpec:
     if superclasses:
         class_spec.superclasses = superclasses
 
-    class_spec.properties = classify_outgoing_properties(class_iri, ogm)
+    # 1) inherit properties from superclasses (keep first occurrence)
+    class_spec.properties = {}
+    for sc in superclasses:
+        inherited = classify_outgoing_properties(sc, ogm)
+        for k, v in inherited.items():
+            if k not in class_spec.properties:
+                class_spec.properties[k] = v
+
+    # 2) own properties override inherited ones
+    own_props = classify_outgoing_properties(class_iri, ogm)
+    class_spec.properties.update(own_props)
 
     print(f"Specifying class {class_iri} as {class_spec.to_string()}")
 
     return class_spec
-
-
-def classify_direct_predicates(
-    node: "Node",
-):
-    sub = node.id
-    ogm = node.ogm
-    db = ogm.db
-    rdf_type = fc["RDF_TYPE"]
-    owl_class = fc["OWL_CLASS"]
-
-    query = SPARQLQuery(include_implicit=False)
-    query.add_select_block(
-        variables=["?predicate", "?object"],
-        where_clauses=[f"<{sub}> ?predicate ?object ."],
-    )
-    result = db.query(query.to_string())
-    predicate_dict: Dict[IRI, tuple[IRI, ...]] = process_bindings_select(
-        result["results"]["bindings"],
-        variables=["object"],
-        grouping_variables=["predicate"],
-    )
-
-    if owl_class in predicate_dict.get(rdf_type, []):
-        # Track handled predicates
-        handled_predicates = set()
-
-        # Assign FC values to variables for match statement
-        rdfs_label = fc["RDFS_LABEL"]
-
-        # Process each predicate with specific handlers
-        for predicate, values in predicate_dict.items():
-            match predicate:
-                case _ if predicate == rdf_type:
-                    for type_iri in values:
-                        node.add_rdf_type(type_iri)
-                    handled_predicates.add(predicate)
-
-                case _ if predicate == rdfs_label:
-                    if values:
-                        node.model_data[rdfs_label] = [str(label) for label in values]
-                    handled_predicates.add(predicate)
-
-                # Add more cases here for other known predicates
-                case _:
-                    # Not handled, will be added to remaining_predicates
-                    pass
-
-        # Update model_data with remaining predicates (excluding handled ones)
-        if handled_predicates != set(predicate_dict.keys()):
-            remaining_predicates = {
-                k: v for k, v in predicate_dict.items() if k not in handled_predicates
-            }
-            logger.warning(
-                "discovered not explicitely handeled direct predicates in OWL Class: %s",
-                remaining_predicates,
-            )
-            node.model_data.update(remaining_predicates)
-
-    logging.debug("Classified predicates: %s", predicate_dict)
 
 
 def classify_outgoing_properties(

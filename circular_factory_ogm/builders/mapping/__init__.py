@@ -2,7 +2,6 @@
 
 from .class_spec import (
     ClassSpec,
-    classify_direct_predicates,
     classify_outgoing_properties,
 )
 from .property_spec import (
@@ -15,7 +14,6 @@ from .property_spec import (
 __all__ = [
     "ClassSpec",
     "PropertySpec",
-    "classify_direct_predicates",
     "classify_outgoing_properties",
     "process_literal_property",
     "process_class_property",

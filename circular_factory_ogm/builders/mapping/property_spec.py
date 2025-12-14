@@ -1,7 +1,8 @@
-from typing import Optional, Type, TYPE_CHECKING
+from typing import Optional, Type, TYPE_CHECKING, Any, List
 from dataclasses import dataclass
 from graph_db_interface import IRI
 import logging
+import pydantic as pd
 
 from ...utils.constants import FUNDAMENTAL_CONCEPTS as fc
 from ...utils.type_conversion import toPythonType
@@ -28,6 +29,44 @@ class PropertySpec:
         from ...utils.pretty_print import property_spec_to_string
 
         return property_spec_to_string(self)
+
+    def to_pydantic_field(self) -> tuple[Any, Any]:
+        """
+        Convert this PropertySpec into a Pydantic field.
+        """
+        # Determine base type
+        base_type = None
+        if self.value_kind in ("data", "literal"):
+            base_type = self.python_range_type or Any
+        elif self.value_kind == "object":
+            if not self.nested:
+                raise ValueError(f"Object property {self.iri} missing nested ClassSpec")
+            base_type = self.nested.to_pydantic_model()
+        elif self.value_kind == "complex":
+            if not self.nested:
+                raise ValueError(f"Complex property {self.iri} missing nested ClassSpec")
+            base_type = self.nested.to_pydantic_model()
+        else:
+            raise ValueError(f"Unknown value_kind: {self.value_kind}")
+
+        # Determine if this is a list based on cardinality
+        is_multi = (self.max_count is not None and self.max_count > 1) or (
+            self.min_count is not None and self.min_count > 1
+        )
+
+        field_type: Any = List[base_type] if is_multi else base_type
+
+        # Wrap in Optional if not required
+        if not self.required:
+            field_type = Optional[field_type]
+
+        # Define Pydantic Field metadata
+        field = pd.Field(
+            default=... if self.required else None,
+            title=str(self.iri),
+        )
+
+        return field_type, field
 
 
 def process_literal_property(ogm: "OGM", prop: IRI) -> PropertySpec:

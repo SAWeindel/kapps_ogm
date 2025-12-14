@@ -1,222 +1,109 @@
 from __future__ import annotations
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    Generic,
-    Optional,
-    Type,
-    TypeVar,
-    Union,
-    TypeAlias,
-)
+from typing import TYPE_CHECKING, Any, Dict, Optional, TypeVar, Union
+
 from pydantic import BaseModel, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
-from graph_db_interface import IRI, GraphDB
+from graph_db_interface import IRI
 
-from .utils.constants import FUNDAMENTAL_CONCEPTS as fc
+if TYPE_CHECKING:
+    from .builders.mapping.class_spec import ClassSpec
 
 if TYPE_CHECKING:
     from .ogm import OGM
 
 T = TypeVar("T", bound=BaseModel)
-Loader: TypeAlias = Callable[[IRI, GraphDB], Union[Dict[str, Any], T]]
 
 
-class Node(Generic[T]):
+class Node:
     """
-       A generic Node class acting as a container for Pydantic models generated from RDF data.
+    Lightweight runtime handle for an RDF-backed instance.
 
-       The Node class contains a reference to the IRI of the RDF resource and may contain
-    lazy loading from a triplestore.
-
-       Can be created from:
-         - A IRI only (lazy reference)
-         - A IRI with partial data (lazy reference with cached data)
-         - A Pydantic model instance directly (already loaded)
-
-       The .load(loader) method loads the full object if not already loaded using loader(id) -> dict|T.
+    Responsibilities:
+    - Hold identity (IRI)
+    - Hold optional ClassSpec
+    - Hold optional instance data
+    - Coordinate lifecycle (lazy load, materialize)
     """
-
-    # __slots__ = ("id", "_data", "instance", "model_cls", "_ogm")
 
     def __init__(
         self,
-        model_cls: Optional[Type[T]] = None,
-        model_data: Optional[Dict[str, Any]] = None,
+        *,
         id: Optional[Union[str, IRI]] = None,
+        class_spec: Optional["ClassSpec"] = None,
         data: Optional[Dict[str, Any]] = None,
         instance: Optional[T] = None,
         ogm: Optional[OGM] = None,
     ):
-        """
-        Initialize a Node instance.
-
-        Args:
-            model_cls: Optional Pydantic model class
-            id: Optional IRI of the RDF resource
-            data: Optional partial data dict for the model
-            instance: Optional already-loaded Pydantic model instance
-            ogm: Optional OGM instance for builder and loader functions
-
-        Raises:
-            ValueError: If none of model_cls, id, or instance is provided
-            TypeError: If instance is not of type model_cls when both are provided
-            ValueError: If id, model_cls, and instance have inconsistent ids when multiple are provided
-            ValueError: If model_cls cannot be determined
-        """
-        if model_cls is None and id is None and instance is None:
-            raise ValueError(
-                "At least one of model_cls, id, or instance must be provided"
-            )
+        """Initialize a Node with identity, optional spec, data, instance, and OGM."""
+        if id is None and instance is None:
+            raise ValueError("Either 'id' or 'instance' must be provided")
 
         if id is not None and not isinstance(id, IRI):
             id = IRI(id)
 
         if instance is not None and not hasattr(instance, "id"):
-            raise ValueError("Instance must have a 'id' attribute")
+            raise ValueError("Instance must expose an 'id' attribute")
 
         if (
-            instance is not None
-            and model_cls is not None
-            and not isinstance(instance, model_cls)
+            id is not None
+            and instance is not None
+            and getattr(instance, "id", None) != id
         ):
-            raise TypeError("instance must be of type model_cls")
+            raise ValueError("Instance id does not match provided IRI")
 
-        if id is not None and instance is not None and instance.id != id:
-            raise ValueError("Instance URI does not match provided IRI")
-
-        self.data = data or None
-        self.instance: Optional[T] = instance
+        # Core attributes
+        self.id: Optional[IRI] = id or getattr(instance, "id", None)
+        self.class_spec = class_spec
+        self.data = data
+        self.instance = instance
         self.ogm = ogm
-        self.model_data = model_data or {}
 
-        # Assign model class and id
-        # 1. If model_cls is provided, use it
-        # 2. If instance is provided, use it
-        # 3. Use provided type cache if it has the URI
-        # 4. Check OGM's type cache if it has the URI
-        # 5. Build a new model class based on the URI and cache it in OGM
-        if model_cls is not None:
-            self.model = model_cls
-            self.id = model_cls.model_fields.get("id").default
-        elif instance is not None:
-            self.model = type(instance)
-            self.id = instance.id
-        elif ogm and id in ogm.type_cache:
-            self.model = ogm.type_cache[id]
-            self.id = id
-        elif id is not None:
-            self.model = None
-            self.id = id
-        else:
-            raise ValueError("Unable to determine model class for Node")
+    # -------------------------
+    # Lifecycle helpers
+    # -------------------------
 
     @property
-    def is_loaded(self) -> bool:
-        """Check if the model instance has been loaded."""
+    def is_materialized(self) -> bool:
         return self.instance is not None
 
-    def build(self) -> Type[T]:
-        """
-        Build/generate a Pydantic model class from the URI.
+    @property
+    def has_data(self) -> bool:
+        return self.data is not None
 
-        If an OGM is attached, uses the OGM's builder function.
-        Otherwise raises NotImplementedError.
+    # -------------------------
+    # Explicit loading
+    # -------------------------
 
-        Returns:
-            A Pydantic model class (Type[T])
+    def load_data(self) -> Dict[str, Any]:
+        if self.data is not None:
+            return self.data
+        if not self.ogm:
+            raise RuntimeError("No OGM attached to load data")
+        self.data = self.ogm.loader(self)
+        return self.data
 
-        Raises:
-            NotImplementedError: If no OGM is attached or builder is not implemented
-        """
-        if self.model is not None:
-            return self.model
-
-        if self.ogm is None:
-            raise NotImplementedError(
-                "Dynamic model building not yet implemented. "
-                "Please provide model_cls explicitly or attach an OGM with a builder."
-            )
-
-        self.model = self.ogm.builder(self)
-
-        return self.model
-
-    def load(self) -> T:
-        """
-        Synchronously load the referenced object using the loader callable, generating an instance.
-
-        The loader is called as loader(id) and must return a dict matching the object type.
-        If already loaded, returns the cached instance without calling the loader.
-
-        Args:
-            loader: Callable that takes a IRI and returns dict or model instance
-
-        Returns:
-            The loaded model instance
-
-        Raises:
-            ValueError: If no URI and no data available to load from, or if model_cls not set
-        """
+    def materialize(self) -> BaseModel:
         if self.instance is not None:
             return self.instance
-
+        if not self.ogm:
+            raise RuntimeError("No OGM attached to build instance")
         if self.data is None:
-            self.data = self.ogm.loader(self)
-
+            self.load_data()
         self.instance = self.ogm.create_node_instance(self)
         return self.instance
 
-    def try_load(self, loader: Loader, default: Optional[T] = None) -> Optional[T]:
-        """
-        Like load but returns default instead of raising on error.
-
-        Args:
-            loader: Callable that takes a IRI and returns dict matching the object type
-            default: Value to return if loading fails
-
-        Returns:
-            The loaded model instance or the default value
-        """
-        try:
-            return self.load(loader)
-        except Exception:
-            return default
-
-    def add_rdf_type(self, iri: IRI) -> None:
-        """
-        Add an RDF type to the model data.
-
-        Args:
-            iri: The IRI of the RDF type to add
-        """
-
-        if fc["RDF_TYPE"] not in self.model_data:
-            self.model_data[fc["RDF_TYPE"]] = []
-        if iri not in self.model_data[fc["RDF_TYPE"]]:
-            self.model_data[fc["RDF_TYPE"]].append(iri)
-
-    def add_rdfs_label(self, label: str) -> None:
-        """
-        Add an RDFS label to the model data.
-
-        Args:
-            label: The label string to add
-        """
-        if fc["RDFS_LABEL"] not in self.model_data:
-            self.model_data[fc["RDFS_LABEL"]] = []
-        if label not in self.model_data[fc["RDFS_LABEL"]]:
-            self.model_data[fc["RDFS_LABEL"]].append(label)
+    # -------------------------
+    # Representation
+    # -------------------------
 
     def __repr__(self) -> str:
         if self.instance:
             return f"Node<instance {self.instance!r}>"
-        elif self.model:
-            return f"Node{self.model!r}"
-        else:
-            return f"Node<ref {self.id!r}, data: {bool(self.data)}>"
+        return (
+            f"Node<ref {self.id!r}, "
+            f"data={self.data is not None}, "
+            f"class_spec={self.class_spec is not None}>"
+        )
 
     @classmethod
     def __get_pydantic_core_schema__(

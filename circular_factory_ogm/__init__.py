@@ -11,7 +11,6 @@ from .loaders.loader_eh import loader_eh
 from .builders.mapping import (
     ClassSpec,
     PropertySpec,
-    classify_direct_predicates,
     classify_outgoing_properties,
     process_literal_property,
     process_class_property,
@@ -42,7 +41,6 @@ __all__ = [
     # Mapping specs
     "ClassSpec",
     "PropertySpec",
-    "classify_direct_predicates",
     "classify_outgoing_properties",
     "process_literal_property",
     "process_class_property",

@@ -28,11 +28,32 @@ class ClassSpec:
     types: List[IRI] = field(default_factory=list)
     superclasses: List[IRI] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
+    _hydrated: bool = field(default=False, init=False)
 
     def to_string(self) -> str:
         from ...utils.pretty_print import class_spec_to_string
 
         return class_spec_to_string(self)
+    
+    def hydrate(self, ogm:"OGM") -> "ClassSpec":
+        """
+        Populate this ClassSpec with all details from the ontology.
+        Uses `specify` internally and updates this instance in place.
+        Returns self
+        """
+        if not self.iri:
+            raise ValueError("Cannot hydrate ClassSpec without an IRI.")
+        
+        hydrated_spec = specify(self.iri, ogm)
+        self.label = hydrated_spec.label
+        self.properties = hydrated_spec.properties
+        self.types = hydrated_spec.types
+        self.superclasses = hydrated_spec.superclasses
+        self.metadata = hydrated_spec.metadata
+        self._hydrated = True
+        return self
+    
+    
 
 
 def specify(class_iri: IRI, ogm: "OGM") -> ClassSpec:

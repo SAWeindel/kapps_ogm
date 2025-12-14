@@ -4,7 +4,10 @@ from typing import Any, Callable, Dict, Optional, Type, Union
 import pydantic as pd
 import logging
 from rdflib import BNode
-#from .utils import fundamentals_expansion
+from circular_factory_ogm.builders.mapping.class_spec import (
+    classify_direct_predicates,
+    classify_outgoing_properties,
+)
 
 from aas_middleware.model.core import Identifiable
 
@@ -24,9 +27,9 @@ class OGM:
     - Builder function for dynamic model generation
     """
 
-    #DEFAULT_EXPANSION_HANDLER: Dict[IRI, Callable] = {
-    #    IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"): fundamentals_expansion.resolve_rdf_type
-    #} 
+    # DEFAULT_EXPANSION_HANDLER: Dict[IRI, Callable] = {
+    #    IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"): None  # TODO: update to new location if needed
+    # }
 
     def __init__(
         self,
@@ -49,7 +52,7 @@ class OGM:
         self.type_cache: Dict[IRI, Type[Identifiable]] = {}
         self._loader_func = loader_func or self._default_loader
         self._builder_func = builder_func or self._default_builder
-        #self.expansion_handler = expansion_handler or self.DEFAULT_EXPANSION_HANDLER
+        # self.expansion_handler = expansion_handler or self.DEFAULT_EXPANSION_HANDLER
 
         self.logger = logger or logging.getLogger("cf_ogm")
 

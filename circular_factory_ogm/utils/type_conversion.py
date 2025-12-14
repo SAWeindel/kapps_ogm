@@ -1,4 +1,4 @@
-from graph_db_interface import IRI, GraphDB, SPARQLQuery
+from graph_db_interface import IRI, GraphDB
 from circular_factory_ogm.utils.constants import FUNDAMENTAL_CONCEPTS as fc
 from typing import Type, Any
 
@@ -24,19 +24,11 @@ def toPythonType(iri: IRI, db: GraphDB) -> Type[Any]:
         "http://www.w3.org/2001/XMLSchema#dateTime": str,
         "http://www.w3.org/2001/XMLSchema#date": str,
     }
-    query = SPARQLQuery()
-    query.add_ask_block(
-        [f"<{str(iri)}> <{str(fc['RDF_TYPE'])}> <{str(fc['RDFS_DATATYPE'])}> ."]
-    )
-    result = db.query(query.to_string())
-    is_datatype = result.get("boolean", False)
 
-    if not is_datatype:
-        return str
-
+    # Check mapping FIRST before querying database
     iri_str = str(iri)
     if iri_str in datatype_mapping:
         return datatype_mapping[iri_str]
 
-    # Default to string if datatype is unknown
+    # Default to string if not in mapping
     return str

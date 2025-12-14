@@ -10,11 +10,15 @@ from circular_factory_ogm.ogm import OGM
 from circular_factory_ogm.loaders.minimal_loader import minimal_loader
 from circular_factory_ogm.builders.minimal_builder import minimal_builder
 from circular_factory_ogm.loaders.loader_eh import loader_eh
-from circular_factory_ogm.utils.fundamentals_expansion import classify_direct_predicates, classify_outgoing_properties
+from circular_factory_ogm.builders.mapping.class_spec import (
+    classify_direct_predicates,
+    classify_outgoing_properties,
+)
 
 NODE_ID = IRI(
-    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#ConveyorBelt"
-    # "https://www.sfb1574.kit.edu/ontologies/DemoStructureInstance#NodeBInstance"
+    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit"
+    # "https://www.sfb1574.kit.edu/ontologies/DemoStructureInstance#NodeB"
+    # "https://www.sfb1574.kit.edu/ontologies/examples#TopLevelEntity"
 )
 
 

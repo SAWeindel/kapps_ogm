@@ -14,7 +14,6 @@ from .utils import (
     FUNDAMENTAL_CONCEPTS,
     PROPERTY_TYPES,
     PROPERTY_CHARACTERISTICS,
-    toPythonType,
     OGMEncoder,
 )
 
@@ -35,6 +34,5 @@ __all__ = [
     "FUNDAMENTAL_CONCEPTS",
     "PROPERTY_TYPES",
     "PROPERTY_CHARACTERISTICS",
-    "toPythonType",
     "OGMEncoder",
 ]

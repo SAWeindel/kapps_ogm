@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from typing import Optional, Type, TYPE_CHECKING, Any, Union, Annotated
 from dataclasses import dataclass
-from graph_db_interface import IRI
+from graph_db_interface import IRI, XSDToPythonTypes
 import logging
 from pydantic import BeforeValidator, Field, conlist
 
 from circular_factory_ogm.utils.constants import FUNDAMENTAL_CONCEPTS as fc
-from circular_factory_ogm.utils.type_conversion import toPythonType
 
 if TYPE_CHECKING:
     from circular_factory_ogm.builders.mapping.class_spec import ClassSpec
@@ -135,7 +134,7 @@ class PropertySpec:
         if not range_iris:
             raise ValueError(f"Literal property {prop} has no rdfs:range defined.")
         range_iri = range_iris[0]
-        python_type = toPythonType(iri=range_iri, db=ogm.db)
+        python_type = XSDToPythonTypes[range_iri]
         property_spec = cls(
             iri=prop,
             value_kind="literal",
@@ -278,7 +277,7 @@ class PropertySpec:
                 # Determine type and requiredness
                 if "someValuesFrom" in restriction:
                     range_iri = IRI(restriction["someValuesFrom"]["value"])
-                    range_type = toPythonType(iri=range_iri, db=ogm.db)
+                    range_type = XSDToPythonTypes[range_iri]
                     if range_type:
                         nested_spec.some_from = range_type
                     else:
@@ -287,9 +286,9 @@ class PropertySpec:
                     nested_spec.min_count = 1
 
                 elif "allValuesFrom" in restriction:
-                    nested_spec.python_range_type = toPythonType(
-                        iri=IRI(restriction["allValuesFrom"]["value"]), db=ogm.db
-                    )
+                    nested_spec.python_range_type = XSDToPythonTypes[
+                        IRI(restriction["allValuesFrom"]["value"])
+                    ]
 
                 # Cardinality
                 if "effectiveMinCardinality" in restriction:

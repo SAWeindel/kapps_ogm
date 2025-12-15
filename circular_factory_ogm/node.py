@@ -8,10 +8,8 @@ from uuid import uuid4
 
 
 if TYPE_CHECKING:
-    from .builders.mapping.class_spec import ClassSpec
-
-if TYPE_CHECKING:
-    from .ogm import OGM
+    from circular_factory_ogm.builders.mapping.class_spec import ClassSpec
+    from circular_factory_ogm.ogm import OGM
 
 T = TypeVar("T", bound=BaseModel)
 

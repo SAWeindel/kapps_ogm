@@ -2,7 +2,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from circular_factory_ogm.builders.mapping.property_spec import PropertySpec
-    from circular_factory_ogm.builders.mapping.class_spec import ClassSpec
 
 
 def property_spec_to_string(prop_spec: "PropertySpec", indent: int = 0) -> str:

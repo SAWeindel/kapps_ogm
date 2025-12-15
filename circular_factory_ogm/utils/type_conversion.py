@@ -1,7 +1,5 @@
-
 import logging
 from graph_db_interface import IRI, GraphDB
-from circular_factory_ogm.utils.constants import FUNDAMENTAL_CONCEPTS as fc
 from typing import Type, Any
 
 

@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Optional, Type
+from typing import Any, Callable, Dict, Optional
 import logging
 import pydantic as pd
 
 from graph_db_interface import GraphDB, IRI
 
-from .node import Node
-from .builders.mapping.class_spec import ClassSpec, specify
-from .utils.blank_instance import (
-    create_blank_instance as _bi_create_blank_instance,
-    blank_instance_from_class_spec as _bi_blank_instance_from_class_spec,
-    blank_value_for_property as _bi_blank_value_for_property,
+from circular_factory_ogm.node import Node
+from circular_factory_ogm.builders.mapping.class_spec import ClassSpec, specify
+from circular_factory_ogm.builders.mapping.property_spec import PropertySpec
+from circular_factory_ogm.utils.blank_instance import (
+    _create_blank_instance,
+    _blank_instance_from_class_spec,
+    _blank_value_for_property,
 )
 
 
@@ -108,7 +109,10 @@ class OGM:
 
         return node
 
-    def _resolve_instance_type(self, instance_iri: IRI) -> IRI:
+    def _resolve_instance_type(
+        self,
+        instance_iri: IRI,
+    ) -> IRI:
         """
         Resolve rdf:type of an instance.
 
@@ -135,18 +139,21 @@ class OGM:
     # ------------------------------------------------------------------
     # Creation / schema-first workflow
     # ------------------------------------------------------------------
-    def _blank_value_for_property(self, prop: PropertySpec) -> Any:
+    def blank_value_for_property(
+        self,
+        prop: PropertySpec,
+    ) -> Any:
         """Delegate to blank_instance helper to keep OGM lean."""
-        return _bi_blank_value_for_property(self, prop)
+        return _blank_value_for_property(self, prop)
 
-    def _blank_instance_from_class_spec(
+    def blank_instance_from_class_spec(
         self,
         *,
         class_spec: ClassSpec,
         instance_iri: Optional[IRI] = None,
     ) -> pd.BaseModel:
         """Delegate to blank_instance helper to keep OGM lean."""
-        return _bi_blank_instance_from_class_spec(
+        return _blank_instance_from_class_spec(
             self, class_spec=class_spec, instance_iri=instance_iri
         )
 
@@ -158,7 +165,7 @@ class OGM:
         property_chains: Optional[list[list[IRI]]] = None,
     ) -> pd.BaseModel:
         """Delegate to blank_instance helper to keep OGM lean."""
-        return _bi_create_blank_instance(
+        return _create_blank_instance(
             self,
             instance_iri=instance_iri,
             class_iri=class_iri,
@@ -169,7 +176,10 @@ class OGM:
     # Loader / materialization
     # ------------------------------------------------------------------
 
-    def loader(self, node: Node) -> Dict[str, Any]:
+    def loader(
+        self,
+        node: Node,
+    ) -> Dict[str, Any]:
         """
         Delegate loading to the configured loader.
 
@@ -180,7 +190,10 @@ class OGM:
         self.logger.debug("Loading data for %s", node.id)
         return self._loader(node)
 
-    def create_node_instance(self, node: Node) -> pd.BaseModel:
+    def create_node_instance(
+        self,
+        node: Node,
+    ) -> pd.BaseModel:
         """
         Materialize a Pydantic instance from node.data and node.class_spec.
         """

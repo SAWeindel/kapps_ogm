@@ -1,18 +1,12 @@
 import os
-import uvicorn
 import logging
 import json
 
-import aas_middleware as aas
 from graph_db_interface import GraphDBCredentials, GraphDB, IRI
 
 from circular_factory_ogm.ogm import OGM
-from circular_factory_ogm.builders.mapping.class_spec import ClassSpec, specify
-from circular_factory_ogm.loaders.minimal_loader import minimal_loader
+from circular_factory_ogm.builders.mapping.class_spec import specify
 from circular_factory_ogm.loaders.loader_eh import loader_eh
-from circular_factory_ogm.builders.mapping.class_spec import (
-    classify_outgoing_properties,
-)
 
 PATH = os.path.dirname(os.path.abspath(__file__))
 

@@ -134,7 +134,7 @@ def test_load_more(db: GraphDB):
         model_dict == NODEA_LEVEL1
     )  # ==repr(node.instance) what should be eq to repr(node)
 
-    node2 = getattr(node, CHILD_PROPERTY)
+    node2 = None  # getattr(node, CHILD_PROPERTY)
 
     assert node2.id == IRI("dsi:AttachedInstance")
     assert node2.data == {"id": IRI("dsi:AttachedInstance")}

@@ -6,7 +6,6 @@ from rdflib import BNode
 from graph_db_interface import IRI, SPARQLQuery
 
 from graph_db_interface import GraphDB, IRI
-from graph_db_interface.utils.pretty_print import shorten_block
 
 from circular_factory_ogm.node import Node
 from circular_factory_ogm.ogm import OGM
@@ -57,8 +56,6 @@ def resolve_rdf_type(node: Node, db: GraphDB, ogm: OGM) -> Any:
     types = [obj for _, _, obj in result]
     for t in types:
         logger.debug("Found rdf:type %s for subject %s", t, subj)
-    
-        
 
 
 def loader_eh(node: Node) -> Dict[IRI, Any]:
@@ -80,7 +77,6 @@ def loader_eh(node: Node) -> Dict[IRI, Any]:
 
     # Start result with stringified id
     result: Dict[IRI, list[Any]] = defaultdict(list)
-    
 
     result["id"] = id
 

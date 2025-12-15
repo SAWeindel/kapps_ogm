@@ -5,14 +5,14 @@ import pydantic as pd
 
 from graph_db_interface import IRI
 
-from ..builders.mapping.class_spec import ClassSpec, specify
-from ..builders.mapping.property_spec import PropertySpec
+from circular_factory_ogm.builders.mapping.class_spec import ClassSpec, specify
+from circular_factory_ogm.builders.mapping.property_spec import PropertySpec
 
 if TYPE_CHECKING:
-    from ..ogm import OGM
+    from circular_factory_ogm.ogm import OGM
 
 
-def blank_value_for_property(ogm: "OGM", prop: PropertySpec) -> Any:
+def _blank_value_for_property(ogm: "OGM", prop: PropertySpec) -> Any:
     """
     Produce a blank value for a property based on its kind and hydration.
     - data/literal: None
@@ -24,7 +24,7 @@ def blank_value_for_property(ogm: "OGM", prop: PropertySpec) -> Any:
 
     if prop.value_kind == "object":
         if prop.nested and getattr(prop.nested, "_hydrated", False):
-            return blank_instance_from_class_spec(ogm, class_spec=prop.nested)
+            return _blank_instance_from_class_spec(ogm, class_spec=prop.nested)
         return None  # unresolved object → IRI placeholder
 
     if prop.value_kind == "complex":
@@ -32,12 +32,12 @@ def blank_value_for_property(ogm: "OGM", prop: PropertySpec) -> Any:
             raise RuntimeError(
                 f"Complex property {prop.iri} requires hydrated nested ClassSpec"
             )
-        return blank_instance_from_class_spec(ogm, class_spec=prop.nested)
+        return _blank_instance_from_class_spec(ogm, class_spec=prop.nested)
 
     raise ValueError(f"Unknown value_kind: {prop.value_kind}")
 
 
-def blank_instance_from_class_spec(
+def _blank_instance_from_class_spec(
     ogm: "OGM",
     *,
     class_spec: ClassSpec,
@@ -59,14 +59,14 @@ def blank_instance_from_class_spec(
         values: list[Any] = []
 
         # Always add one blank value, regardless of requiredness
-        values.append(blank_value_for_property(ogm, prop))
+        values.append(_blank_value_for_property(ogm, prop))
 
         data[field_name] = values
 
     return model_cls.model_construct(**data)
 
 
-def create_blank_instance(
+def _create_blank_instance(
     ogm: "OGM",
     *,
     instance_iri: IRI,
@@ -80,7 +80,7 @@ def create_blank_instance(
         property_chains=property_chains,
     )
 
-    return blank_instance_from_class_spec(
+    return _blank_instance_from_class_spec(
         ogm,
         class_spec=class_spec,
         instance_iri=instance_iri,

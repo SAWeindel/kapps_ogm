@@ -2,25 +2,23 @@ from typing import Optional, Type, Any, Dict, List, TYPE_CHECKING
 from dataclasses import dataclass, field
 import logging
 import pydantic as pd
-from graph_db_interface import IRI, SPARQLQuery
-from graph_db_interface.utils.processing import process_bindings_select
-from .property_spec import (
+
+from graph_db_interface import IRI
+from circular_factory_ogm.builders.mapping.property_spec import (
     process_literal_property,
     process_class_property,
     process_complex_property,
 )
-
-from ...utils.constants import (
+from circular_factory_ogm.utils.pretty_print import class_spec_to_string
+from circular_factory_ogm.utils.constants import (
     FUNDAMENTAL_CONCEPTS as fc,
     PROPERTY_TYPES,
     PROPERTY_CHARACTERISTICS,
 )
 
 if TYPE_CHECKING:
-    from .property_spec import PropertySpec
-    from ...ogm import OGM
-    from ...node import Node
-    from ...utils.pretty_print import class_spec_to_string
+    from circular_factory_ogm.builders.mapping.property_spec import PropertySpec
+    from circular_factory_ogm.ogm import OGM
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +34,6 @@ class ClassSpec:
     _hydrated: bool = field(default=False, init=False)
 
     def to_string(self) -> str:
-        from ...utils.pretty_print import class_spec_to_string
 
         return class_spec_to_string(self)
 
@@ -187,7 +184,8 @@ def specify(
 
 
 def classify_outgoing_properties(
-    class_iri: IRI, ogm: "OGM"
+    class_iri: IRI,
+    ogm: "OGM",
 ) -> dict[IRI, "PropertySpec"]:
     db = ogm.db
 

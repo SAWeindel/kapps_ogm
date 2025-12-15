@@ -1,17 +1,15 @@
-from typing import Optional, Type, TYPE_CHECKING, Any, List, Union, Annotated
+from typing import Optional, Type, TYPE_CHECKING, Any, Union, Annotated
 from dataclasses import dataclass
 from graph_db_interface import IRI
 import logging
-import pydantic as pd
 from pydantic import BeforeValidator, Field, conlist
 
-from ...utils.constants import FUNDAMENTAL_CONCEPTS as fc
-from ...utils.type_conversion import toPythonType
+from circular_factory_ogm.utils.constants import FUNDAMENTAL_CONCEPTS as fc
+from circular_factory_ogm.utils.type_conversion import toPythonType
 
 if TYPE_CHECKING:
-    from .class_spec import ClassSpec
-    from ...ogm import OGM
-    from ...utils.pretty_print import property_spec_to_string
+    from circular_factory_ogm.builders.mapping.class_spec import ClassSpec
+    from circular_factory_ogm.ogm import OGM
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +117,10 @@ class PropertySpec:
         return field_type, field
 
 
-def process_literal_property(ogm: "OGM", prop: IRI) -> PropertySpec:
+def process_literal_property(
+    ogm: "OGM",
+    prop: IRI,
+) -> "PropertySpec":
     triples = ogm.db.triples_get(sub=prop, pred=fc["RDFS_RANGE"], include_implicit=True)
     range_iris = [triple[2] for triple in triples]
     if len(range_iris) > 1:
@@ -145,7 +146,10 @@ def process_literal_property(ogm: "OGM", prop: IRI) -> PropertySpec:
     return property_spec
 
 
-def process_class_property(ogm: "OGM", prop: IRI) -> PropertySpec:
+def process_class_property(
+    ogm: "OGM",
+    prop: IRI,
+) -> "PropertySpec":
     from .class_spec import ClassSpec
 
     triples = ogm.db.triples_get(sub=prop, pred=fc["RDFS_RANGE"], include_implicit=True)
@@ -168,7 +172,10 @@ def process_class_property(ogm: "OGM", prop: IRI) -> PropertySpec:
     return property_spec
 
 
-def process_complex_property(ogm: "OGM", prop: IRI) -> PropertySpec:
+def process_complex_property(
+    ogm: "OGM",
+    prop: IRI,
+) -> "PropertySpec":
     """
     Processes a complex OWL property and returns a PropertySpec with a nested ClassSpec
     that includes intersection, union, complement, and enumerated restrictions.

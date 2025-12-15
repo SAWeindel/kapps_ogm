@@ -65,7 +65,7 @@ class OGM:
         spec = specify(
             class_iri=class_iri,
             ogm=self,
-            property_chain=property_chain,
+            property_chains=property_chain,
         )
         return spec
 
@@ -120,7 +120,7 @@ class OGM:
             raise ValueError(f"No rdf:type found for instance {instance_iri}")
         if len(types) > 1:
             self.logger.warning(
-                "Multiple rdf:types for %s, using first: %s", #TODO: improve handling of multiple types
+                "Multiple rdf:types for %s, using first: %s",  # TODO: improve handling of multiple types
                 instance_iri,
                 types,
             )

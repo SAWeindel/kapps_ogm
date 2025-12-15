@@ -1,8 +1,9 @@
-from typing import Optional, Type, TYPE_CHECKING, Any, List
+from typing import Optional, Type, TYPE_CHECKING, Any, List, Union, Annotated
 from dataclasses import dataclass
 from graph_db_interface import IRI
 import logging
 import pydantic as pd
+from pydantic import BeforeValidator, Field, conlist
 
 from ...utils.constants import FUNDAMENTAL_CONCEPTS as fc
 from ...utils.type_conversion import toPythonType
@@ -20,10 +21,17 @@ class PropertySpec:
     iri: IRI
     value_kind: str  # 'data' or 'object'
     python_range_type: Optional[Type] = None
-    required: bool = False
     min_count: Optional[int] = None
     max_count: Optional[int] = None
-    nested: Optional["ClassSpec"] = None  # Use string annotation
+    some_from: Optional[Union[IRI, Type]] = None
+    all_from: Optional[Union[IRI, Type]] = None
+    nested: Optional["ClassSpec"] = None
+
+    @property
+    def required(self) -> bool:
+        if self.min_count is not None and self.min_count >= 1:
+            return True
+        return False
 
     def to_string(self) -> str:
         from ...utils.pretty_print import property_spec_to_string
@@ -31,39 +39,83 @@ class PropertySpec:
         return property_spec_to_string(self)
 
     def to_pydantic_field(self) -> tuple[Any, Any]:
-        """
-        Convert this PropertySpec into a Pydantic field.
-        """
-        # Determine base type
-        base_type = None
-        if self.value_kind in ("data", "literal"):
-            base_type = self.python_range_type or Any
+        """Convert this PropertySpec into a Pydantic field with validators."""
+
+        if self.value_kind == "literal":
+            # If all_from is set, use it as type restriction
+            if self.all_from:
+                if isinstance(self.all_from, IRI):
+                    raise ValueError(
+                        f"Literal property {self.iri} cannot have allValuesFrom as Object IRI"
+                    )
+                base_type = self.all_from
+            else:
+                base_type = self.python_range_type or Any
         elif self.value_kind == "object":
-            if not self.nested:
-                raise ValueError(f"Object property {self.iri} missing nested ClassSpec")
-            base_type = self.nested.to_pydantic_model()
+            # Nested hydrated class becomes Pydantic model; else fallback to IRI
+            if self.nested and getattr(self.nested, "_hydrated", False):
+                base_type = self.nested.to_pydantic_model()
+            else:
+                base_type = IRI
         elif self.value_kind == "complex":
-            if not self.nested:
-                raise ValueError(f"Complex property {self.iri} missing nested ClassSpec")
-            base_type = self.nested.to_pydantic_model()
+            # Complex properties have nested ClassSpec that should be converted to Pydantic model
+            if self.nested:
+                base_type = self.nested.to_pydantic_model()
+            else:
+                base_type = Any
         else:
             raise ValueError(f"Unknown value_kind: {self.value_kind}")
 
-        # Determine if this is a list based on cardinality
-        is_multi = (self.max_count is not None and self.max_count > 1) or (
-            self.min_count is not None and self.min_count > 1
-        )
+        #cardinality
+        min_count = self.min_count or 0
+        max_count = self.max_count
 
-        field_type: Any = List[base_type] if is_multi else base_type
+        # Always treat multiple cardinality as list
+        is_multi = max_count is None or max_count > 1 or min_count > 1
+        if is_multi:
+            field_type = conlist(
+                base_type, min_length=min_count, max_length=max_count
+            )
+        else:
+            field_type = base_type
+
+        # Apply some_from / all_from validators using Annotated types
+        if self.some_from or self.all_from:
+
+            def make_validator(some_type, all_type):
+                def validate(v):
+                    if v is None:
+                        return v
+                    values = v if isinstance(v, list) else [v]
+
+                    if some_type is not None:
+                        if not any(isinstance(x, some_type) for x in values):
+                            raise ValueError(
+                                f"Property {self.iri} requires at least one value of type {some_type}"
+                            )
+
+                    if all_type is not None:
+                        if not all(isinstance(x, all_type) for x in values):
+                            raise ValueError(
+                                f"Property {self.iri} requires all values to be of type {all_type}"
+                            )
+
+                    return v
+
+                return validate
+
+            validator = BeforeValidator(make_validator(self.some_from, self.all_from))
+            field_type = Annotated[field_type, validator]
 
         # Wrap in Optional if not required
         if not self.required:
             field_type = Optional[field_type]
 
-        # Define Pydantic Field metadata
-        field = pd.Field(
+        # Create Pydantic Field
+        field = Field(
             default=... if self.required else None,
             title=str(self.iri),
+            description=f"PropertySpec for {self.iri}",
         )
 
         return field_type, field
@@ -82,7 +134,7 @@ def process_literal_property(ogm: "OGM", prop: IRI) -> PropertySpec:
     python_type = toPythonType(iri=range_iri, db=ogm.db)
     property_spec = PropertySpec(
         iri=prop,
-        value_kind="data",
+        value_kind="literal",
         python_range_type=python_type,
         required=False,
         max_count=None,
@@ -111,7 +163,7 @@ def process_class_property(ogm: "OGM", prop: IRI) -> PropertySpec:
         iri=prop,
         value_kind="object",
         python_range_type=None,  # Will be another ClassSpec
-        required=False,
+        
         max_count=None,
         min_count=None,
         nested=ClassSpec(iri=range_iri),
@@ -131,7 +183,7 @@ def process_complex_property(ogm: "OGM", prop: IRI) -> PropertySpec:
         iri=prop,
         value_kind="complex",
         python_range_type=None,
-        required=False,
+
         min_count=None,
         max_count=None,
         nested=None,
@@ -203,7 +255,6 @@ def process_complex_property(ogm: "OGM", prop: IRI) -> PropertySpec:
                     else "object"
                 ),
                 python_range_type=None,
-                required=False,
                 min_count=None,
                 max_count=None,
                 nested=None,
@@ -211,24 +262,25 @@ def process_complex_property(ogm: "OGM", prop: IRI) -> PropertySpec:
 
             # Determine type and requiredness
             if "someValuesFrom" in restriction:
-                nested_spec.python_range_type = toPythonType(
-                    iri=IRI(restriction["someValuesFrom"]["value"]), db=ogm.db
-                )
-                nested_spec.required = True
+                range_iri = IRI(restriction["someValuesFrom"]["value"])
+                range_type = toPythonType(iri=range_iri, db=ogm.db)
+                if range_type:
+                    nested_spec.some_from = range_type
+                else:
+                    nested_spec.some_from = range_iri
+
+                nested_spec.min_count = 1
 
             elif "allValuesFrom" in restriction:
                 nested_spec.python_range_type = toPythonType(
                     iri=IRI(restriction["allValuesFrom"]["value"]), db=ogm.db
                 )
-                nested_spec.required = False
 
             # Cardinality
             if "effectiveMinCardinality" in restriction:
                 nested_spec.min_count = int(
                     restriction["effectiveMinCardinality"]["value"]
                 )
-                if nested_spec.min_count > 0:
-                    nested_spec.required = True
 
             if "effectiveMaxCardinality" in restriction:
                 nested_spec.max_count = int(

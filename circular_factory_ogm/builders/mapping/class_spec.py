@@ -60,28 +60,40 @@ class ClassSpec:
 
     def to_pydantic_model(self) -> Type[pd.BaseModel]:
         """
-        Convert ClassSpec into a Pydantic model using PropertySpec.to_pydantic_field().
+        Convert ClassSpec into a Pydantic model.
+        Delegates to PropertySpec.to_pydantic_field() for consistent field generation.
         """
         fields: Dict[str, tuple[Any, Any]] = {}
-        iri_field_map: Dict[str, str] = {}
+
         for prop_iri, prop_spec in self.properties.items():
-            # Use sanitized IRI token (lined) for field names to satisfy Pydantic
-            field_name = getattr(prop_iri, "lined", None) or str(prop_iri).replace("/", "_").replace("#", "_")
-            fields[field_name] = prop_spec.to_pydantic_field()
-            iri_field_map[field_name] = str(prop_iri)
-        # Use sanitized IRI token (lined) for model name as well
-        model_name = getattr(self.iri, "lined", None) or str(self.iri).replace("/", "_").replace("#", "_")
-        model_cls = pd.create_model(model_name, __base__=pd.BaseModel, **fields)  # type: ignore[arg-type]
-        # Attach mapping from sanitized field names to full IRIs for downstream use
-        setattr(model_cls, "_iri_fields", iri_field_map)
-        setattr(model_cls, "_iri_model_name", str(self.iri))
+            # Use sanitized IRI for field names
+            field_name = prop_iri.lined
+
+            # Delegate to PropertySpec for field generation (includes validators via Annotated types)
+            field_type, field = prop_spec.to_pydantic_field()
+            fields[field_name] = (field_type, field)
+
+        # Build the Pydantic model
+        model_name = (
+            self.iri.lined if self.iri else "AnonymousClass"
+        )  # TODO: use graphdbs blanknode generator?
+        model_cls = pd.create_model(model_name, __base__=(pd.BaseModel,), **fields)  # type: ignore[call-overload] #TODO: is baseModel correct base here?
+
+        # Keep mapping to IRIs for reference
+        setattr(
+            model_cls,
+            "_iri_fields",
+            {prop_iri.lined: prop_iri for prop_iri in self.properties.keys()},
+        )
+        setattr(model_cls, "_iri_model_name", self.iri if self.iri else None)
+
         return model_cls
 
 
 def specify(
     class_iri: IRI,
     ogm: "OGM",
-    property_chain: Optional[list[IRI]] = None,
+    property_chains: Optional[list[list[IRI]]] = None,
 ) -> ClassSpec:
     """
     create a ClassSpec for the given IRI by analyzing its RDF data in the GraphDB via the OGM instance.
@@ -135,6 +147,40 @@ def specify(
     own_props = classify_outgoing_properties(class_iri, ogm)
     class_spec.properties.update(own_props)
 
+    if property_chains:
+        for property_chain in property_chains:
+            current_spec = class_spec
+            for i, prop_iri in enumerate(property_chain):
+                if prop_iri not in current_spec.properties:
+                    raise ValueError(
+                        f"Property {prop_iri} not found in class {current_spec.iri} "
+                        f"while processing property chain."
+                    )
+
+                prop_spec = current_spec.properties[prop_iri]
+
+                if prop_spec.nested is None:
+                    raise ValueError(
+                        f"Property {prop_iri} has no nested ClassSpec "
+                        f"(cannot continue property chain)."
+                    )
+
+                # Rebuild nested ClassSpec with remaining chain tail
+                remaining_chain = property_chain[i + 1 :]
+                nested_spec = specify(
+                    class_iri=prop_spec.nested.iri,
+                    ogm=ogm,
+                    property_chains=[remaining_chain] if remaining_chain else None,
+                )
+                # Mark as hydrated since it was fully specified
+                nested_spec._hydrated = True
+
+                # Replace nested spec for this chain only
+                prop_spec.nested = nested_spec
+                current_spec = nested_spec
+
+    # Mark as hydrated if it was fully specified
+    class_spec._hydrated = True
     print(f"Specifying class {class_iri} as {class_spec.to_string()}")
 
     return class_spec

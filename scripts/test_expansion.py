@@ -19,6 +19,14 @@ NODE_ID = IRI(
     # "https://www.sfb1574.kit.edu/ontologies/DemoStructureInstance#NodeB"
     # "https://www.sfb1574.kit.edu/ontologies/examples#TopLevelEntity"
 )
+property_chains = [
+    [
+        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"),
+    ],
+    [
+        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"),
+    ],
+]
 
 
 def main():
@@ -35,46 +43,17 @@ def main():
     db.logger.setLevel(logging.INFO)
     # Refactored OGM: pass loader only
     ogm = OGM(db=db, loader=loader_eh)
-    class_spec = specify(class_iri=NODE_ID, ogm=ogm)
-    print("ClassSpec:")
+
+    # Specify TransferUnit with property chains - should be fully hydrated
+    class_spec = specify(class_iri=NODE_ID, ogm=ogm, property_chains=property_chains)
+    print("TransferUnit ClassSpec (fully hydrated):")
     print(class_spec.to_string())
 
-    # Create Pydantic model from ClassSpec and dump JSON Schema
+    # Create Pydantic model from fully hydrated ClassSpec and dump JSON Schema
     model_cls = class_spec.to_pydantic_model()
     schema = model_cls.model_json_schema()
-    print("\nPydantic model JSON Schema:")
+    print("\nTransferUnit Pydantic JSON Schema (with nested classes):")
     print(json.dumps(schema, indent=2))
-
-    # Next: fully hydrate nested classes (ConveyorBelt, LightBarrier) and dump schemas
-    conveyor_belt_iri = IRI(
-        "https://www.sfb1574.kit.edu/ontologies/TransferUnit#ConveyorBelt"
-    )
-    light_barrier_iri = IRI(
-        "https://www.sfb1574.kit.edu/ontologies/TransferUnit#LightBarrier"
-    )
-
-    cb_spec = specify(class_iri=conveyor_belt_iri, ogm=ogm)
-    lb_spec = specify(class_iri=light_barrier_iri, ogm=ogm)
-
-    print("\nConveyorBelt ClassSpec:")
-    print(cb_spec.to_string())
-    try:
-        cb_model = cb_spec.to_pydantic_model()
-        cb_schema = cb_model.model_json_schema()
-        print("\nConveyorBelt JSON Schema:")
-        print(json.dumps(cb_schema, indent=2))
-    except Exception as e:
-        print(f"\nConveyorBelt JSON Schema generation failed: {e}")
-
-    print("\nLightBarrier ClassSpec:")
-    print(lb_spec.to_string())
-    try:
-        lb_model = lb_spec.to_pydantic_model()
-        lb_schema = lb_model.model_json_schema()
-        print("\nLightBarrier JSON Schema:")
-        print(json.dumps(lb_schema, indent=2))
-    except Exception as e:
-        print(f"\nLightBarrier JSON Schema generation failed: {e}")
 
     # node = ogm.create_node(id=NODE_ID)
     # classify_outgoing_properties(node)

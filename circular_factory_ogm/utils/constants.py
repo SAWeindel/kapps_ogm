@@ -10,6 +10,7 @@ FUNDAMENTAL_CONCEPTS = {
     "RDFS_LABEL": IRI("http://www.w3.org/2000/01/rdf-schema#label"),
     "RDFS_DATATYPE": IRI("http://www.w3.org/2000/01/rdf-schema#Datatype"),
     "RDF_TYPE_VALUE": IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+    "OWL_NAMED_INDIVIDUAL": IRI("http://www.w3.org/2002/07/owl#NamedIndividual"),
 }
 
 PROPERTY_TYPES = {

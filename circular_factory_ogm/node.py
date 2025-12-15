@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, TypeVar, Union
 from pydantic import BaseModel, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
 from graph_db_interface import IRI
+from uuid import uuid4
+
 
 if TYPE_CHECKING:
     from .builders.mapping.class_spec import ClassSpec
@@ -104,6 +106,90 @@ class Node:
             f"data={self.data is not None}, "
             f"class_spec={self.class_spec is not None}>"
         )
+
+    def to_triples(
+        self,
+    ) -> set[tuple[IRI, IRI, Union[IRI, Any]]]:
+        """
+        Serialize this Node's instance into RDF triples.
+
+        Returns:
+            Set of (subject, predicate, object) triples
+        """
+        if self.instance is None:
+            raise RuntimeError("Node must be materialized before calling to_triples")
+
+        if self.class_spec is None:
+            raise RuntimeError("Node must have a ClassSpec to serialize to triples")
+
+        triples: set[tuple[IRI, IRI, Union[IRI, Any]]] = set()
+
+        subject = self.id
+        if subject is None:
+            raise RuntimeError("Node has no IRI")
+
+        # Add rdf:type triple for the class
+        from .utils.constants import FUNDAMENTAL_CONCEPTS as fc
+
+        if self.class_spec.iri:
+            triples.add((subject, fc["RDF_TYPE"], self.class_spec.iri))
+            triples.add((subject, fc["RDF_TYPE"], fc["OWL_NAMED_INDIVIDUAL"]))
+
+        model = self.instance
+        iri_field_map: dict[str, IRI] = getattr(model.__class__, "_iri_fields", {})
+
+        for field_name, prop_iri in iri_field_map.items():
+            value = getattr(model, field_name, None)
+            if value is None:
+                continue
+
+            # Always treat as list
+            values = value if isinstance(value, list) else [value]
+
+            for v in values:
+                triples |= self._value_to_triples(
+                    subject=subject,
+                    predicate=prop_iri,
+                    value=v,
+                )
+
+        return triples
+
+    def _value_to_triples(
+        self,
+        *,
+        subject: IRI,
+        predicate: IRI,
+        value: Any,
+    ) -> set[tuple[IRI, IRI, Union[IRI, Any]]]:
+        """
+        Convert a single property value into triples.
+        """
+        triples: set[tuple[IRI, IRI, Union[IRI, Any]]] = set()
+
+        # Case 1: Nested Pydantic object
+        if isinstance(value, BaseModel):
+            bnode = IRI(f"_:{uuid4().hex}")
+            triples.add((subject, predicate, bnode))
+
+            # Recurse
+            nested_node = Node(
+                id=bnode,
+                instance=value,
+                class_spec=None,  # Nested already encoded in model
+                ogm=self.ogm,
+            )
+            triples |= nested_node.to_triples()
+
+        # Case 2: IRI object
+        elif isinstance(value, IRI):
+            triples.add((subject, predicate, value))
+
+        # Case 3: Literal
+        else:
+            triples.add((subject, predicate, value))
+
+        return triples
 
     @classmethod
     def __get_pydantic_core_schema__(

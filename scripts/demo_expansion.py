@@ -14,6 +14,8 @@ from circular_factory_ogm.builders.mapping.class_spec import (
     classify_outgoing_properties,
 )
 
+PATH = os.path.dirname(os.path.abspath(__file__))
+
 NODE_ID = IRI(
     "https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit"
     # "https://www.sfb1574.kit.edu/ontologies/DemoStructureInstance#NodeB"
@@ -48,12 +50,16 @@ def main():
     class_spec = specify(class_iri=NODE_ID, ogm=ogm, property_chains=property_chains)
     print("TransferUnit ClassSpec (fully hydrated):")
     print(class_spec.to_string())
+    with open(os.path.join(PATH, "output/transfer_unit_class_spec.txt"), "w") as f:
+        f.write(class_spec.to_string())
 
     # Create Pydantic model from fully hydrated ClassSpec and dump JSON Schema
     model_cls = class_spec.to_pydantic_model()
     schema = model_cls.model_json_schema()
     print("\nTransferUnit Pydantic JSON Schema (with nested classes):")
     print(json.dumps(schema, indent=2))
+    with open(os.path.join(PATH, "output/transfer_unit_json_schema.json"), "w") as f:
+        json.dump(schema, f, indent=2)
 
     # node = ogm.create_node(id=NODE_ID)
     # classify_outgoing_properties(node)
@@ -64,8 +70,9 @@ def main():
     )
     print("\nBlank instance of TransferUnit with nested properties:")
     print(blank_instance.model_dump_json(indent=2))
+    with open(os.path.join(PATH, "output/transfer_unit_blank_instance.json"), "w") as f:
+        f.write(blank_instance.model_dump_json(indent=2))
+
+
 if __name__ == "__main__":
     main()
-
-
-

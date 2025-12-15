@@ -66,16 +66,14 @@ class PropertySpec:
         else:
             raise ValueError(f"Unknown value_kind: {self.value_kind}")
 
-        #cardinality
+        # cardinality
         min_count = self.min_count or 0
         max_count = self.max_count
 
         # Always treat multiple cardinality as list
         is_multi = max_count is None or max_count > 1 or min_count > 1
         if is_multi:
-            field_type = conlist(
-                base_type, min_length=min_count, max_length=max_count
-            )
+            field_type = conlist(base_type, min_length=min_count, max_length=max_count)
         else:
             field_type = base_type
 
@@ -163,7 +161,6 @@ def process_class_property(ogm: "OGM", prop: IRI) -> PropertySpec:
         iri=prop,
         value_kind="object",
         python_range_type=None,  # Will be another ClassSpec
-        
         max_count=None,
         min_count=None,
         nested=ClassSpec(iri=range_iri),
@@ -183,7 +180,6 @@ def process_complex_property(ogm: "OGM", prop: IRI) -> PropertySpec:
         iri=prop,
         value_kind="complex",
         python_range_type=None,
-
         min_count=None,
         max_count=None,
         nested=None,
@@ -236,6 +232,8 @@ def process_complex_property(ogm: "OGM", prop: IRI) -> PropertySpec:
     if not bindings:
         # No restrictions; treat as simple object with empty ClassSpec
         property_spec.nested = ClassSpec(iri=None, properties={}, metadata={})
+        # Anonymous class is fully specified in-place
+        property_spec.nested._hydrated = True
         return property_spec
 
     # Initialize nested ClassSpec for the anonymous range
@@ -316,6 +314,10 @@ def process_complex_property(ogm: "OGM", prop: IRI) -> PropertySpec:
         if "oneOfList" in first_binding:
             # Note: resolve_rdf_list method would need to be implemented in GraphDB
             property_spec.nested.metadata["oneOf"] = first_binding["oneOfList"]["value"]
+
+    # Mark anonymous nested class as hydrated since it was fully built here
+    if property_spec.nested is not None:
+        property_spec.nested._hydrated = True
 
     print(f"Complex property {prop} processed: {property_spec.to_string()}")
     return property_spec

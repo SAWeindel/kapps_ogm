@@ -57,7 +57,15 @@ def main():
 
     # node = ogm.create_node(id=NODE_ID)
     # classify_outgoing_properties(node)
-
-
+    blank_instance = ogm.create_blank_instance(
+        class_iri=NODE_ID,
+        property_chains=property_chains,
+        instance_iri="http://example.org/instances/TransferUnit1",
+    )
+    print("\nBlank instance of TransferUnit with nested properties:")
+    print(blank_instance.model_dump_json(indent=2))
 if __name__ == "__main__":
     main()
+
+
+

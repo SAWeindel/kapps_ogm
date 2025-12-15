@@ -8,6 +8,11 @@ from graph_db_interface import GraphDB, IRI
 
 from .node import Node
 from .builders.mapping.class_spec import ClassSpec, specify
+from .utils.blank_instance import (
+    create_blank_instance as _bi_create_blank_instance,
+    blank_instance_from_class_spec as _bi_blank_instance_from_class_spec,
+    blank_value_for_property as _bi_blank_value_for_property,
+)
 
 
 class OGM:
@@ -49,7 +54,7 @@ class OGM:
         self,
         *,
         class_iri: IRI,
-        property_chain: Optional[list[IRI]] = None,
+        property_chains: Optional[list[list[IRI]]] = None,
     ) -> ClassSpec:
         """
         Resolve a ClassSpec for a given class IRI.
@@ -59,13 +64,13 @@ class OGM:
         self.logger.debug(
             "Resolving ClassSpec for %s (chain=%s)",
             class_iri,
-            property_chain,
+            property_chains,
         )
 
         spec = specify(
             class_iri=class_iri,
             ogm=self,
-            property_chains=property_chain,
+            property_chains=property_chains,
         )
         return spec
 
@@ -77,7 +82,7 @@ class OGM:
         self,
         *,
         instance_iri: IRI,
-        property_chain: Optional[list[IRI]] = None,
+        property_chains: Optional[list[list[IRI]]] = None,
     ) -> Node:
         """
         Fetch an existing RDF instance and return a Node.
@@ -92,7 +97,7 @@ class OGM:
         class_iri = self._resolve_instance_type(instance_iri)
         class_spec = self.get_class_spec(
             class_iri=class_iri,
-            property_chain=property_chain,
+            property_chains=property_chains if property_chains else None,
         )
 
         node = Node(
@@ -130,31 +135,35 @@ class OGM:
     # ------------------------------------------------------------------
     # Creation / schema-first workflow
     # ------------------------------------------------------------------
+    def _blank_value_for_property(self, prop: PropertySpec) -> Any:
+        """Delegate to blank_instance helper to keep OGM lean."""
+        return _bi_blank_value_for_property(self, prop)
 
-    def create_schema(
+    def _blank_instance_from_class_spec(
         self,
         *,
+        class_spec: ClassSpec,
+        instance_iri: Optional[IRI] = None,
+    ) -> pd.BaseModel:
+        """Delegate to blank_instance helper to keep OGM lean."""
+        return _bi_blank_instance_from_class_spec(
+            self, class_spec=class_spec, instance_iri=instance_iri
+        )
+
+    def create_blank_instance(
+        self,
+        *,
+        instance_iri: IRI,
         class_iri: IRI,
-        property_chain: Optional[list[IRI]] = None,
-    ) -> Type[pd.BaseModel]:
-        """
-        Create a Pydantic schema for user-driven instance creation.
-
-        Used when the user says:
-        'I want to create X, but don’t know what to fill in.'
-        """
-        self.logger.info(
-            "Creating schema for class %s (chain=%s)",
-            class_iri,
-            property_chain,
-        )
-
-        class_spec = self.get_class_spec(
+        property_chains: Optional[list[list[IRI]]] = None,
+    ) -> pd.BaseModel:
+        """Delegate to blank_instance helper to keep OGM lean."""
+        return _bi_create_blank_instance(
+            self,
+            instance_iri=instance_iri,
             class_iri=class_iri,
-            property_chain=property_chain,
+            property_chains=property_chains,
         )
-
-        return class_spec.to_pydantic_model()  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------
     # Loader / materialization

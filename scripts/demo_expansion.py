@@ -5,7 +5,7 @@ import json
 from graph_db_interface import GraphDBCredentials, GraphDB, IRI
 
 from circular_factory_ogm.ogm import OGM
-from circular_factory_ogm.builders.mapping.class_spec import specify
+from circular_factory_ogm.builders.mapping.class_spec import ClassSpec
 from circular_factory_ogm.loaders.loader_eh import loader_eh
 
 PATH = os.path.dirname(os.path.abspath(__file__))
@@ -41,7 +41,9 @@ def main():
     ogm = OGM(db=db, loader=loader_eh)
 
     # Specify TransferUnit with property chains - should be fully hydrated
-    class_spec = specify(class_iri=NODE_ID, ogm=ogm, property_chains=property_chains)
+    class_spec = ClassSpec.specify(
+        class_iri=NODE_ID, ogm=ogm, property_chains=property_chains
+    )
     print("TransferUnit ClassSpec (fully hydrated):")
     print(class_spec.to_string())
     with open(os.path.join(PATH, "output/transfer_unit_class_spec.txt"), "w") as f:

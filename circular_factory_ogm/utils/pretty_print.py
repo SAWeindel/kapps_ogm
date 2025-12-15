@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from circular_factory_ogm.builders.mapping.property_spec import PropertySpec
+    from circular_factory_ogm.builders.mapping.class_spec import ClassSpec
 
 
 def property_spec_to_string(prop_spec: "PropertySpec", indent: int = 0) -> str:
@@ -40,7 +41,7 @@ def property_spec_to_string(prop_spec: "PropertySpec", indent: int = 0) -> str:
     return "\n".join(lines)
 
 
-def class_spec_to_string(class_spec, indent: int = 0) -> str:
+def class_spec_to_string(class_spec: "ClassSpec", indent: int = 0) -> str:
     """
     Recursively converts a ClassSpec (with nested PropertySpec objects) into a formatted string.
     """

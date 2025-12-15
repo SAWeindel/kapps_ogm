@@ -7,7 +7,7 @@ import pydantic as pd
 from graph_db_interface import GraphDB, IRI
 
 from circular_factory_ogm.node import Node
-from circular_factory_ogm.builders.mapping.class_spec import ClassSpec, specify
+from circular_factory_ogm.builders.mapping.class_spec import ClassSpec
 from circular_factory_ogm.builders.mapping.property_spec import PropertySpec
 from circular_factory_ogm.utils.blank_instance import (
     _create_blank_instance,
@@ -68,7 +68,7 @@ class OGM:
             property_chains,
         )
 
-        spec = specify(
+        spec = ClassSpec.specify(
             class_iri=class_iri,
             ogm=self,
             property_chains=property_chains,

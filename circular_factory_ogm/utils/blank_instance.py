@@ -5,7 +5,7 @@ import pydantic as pd
 
 from graph_db_interface import IRI
 
-from circular_factory_ogm.builders.mapping.class_spec import ClassSpec, specify
+from circular_factory_ogm.builders.mapping.class_spec import ClassSpec
 from circular_factory_ogm.builders.mapping.property_spec import PropertySpec
 
 if TYPE_CHECKING:
@@ -74,7 +74,7 @@ def _create_blank_instance(
     property_chains: Optional[list[list[IRI]]] = None,
 ) -> pd.BaseModel:
     """Resolve schema (respecting property chains) and return a blank instance."""
-    class_spec = specify(
+    class_spec = ClassSpec.specify(
         class_iri=class_iri,
         ogm=ogm,
         property_chains=property_chains,

@@ -2,20 +2,12 @@ from .node import Node
 from .ogm import OGM
 
 # Import builders and loaders
-from .builders.minimal_builder import minimal_builder
-from .builders.reference_builder import reference_builder
-from .loaders.minimal_loader import minimal_loader
-from .loaders.loader_eh import loader_eh
+from .builders import minimal_builder, reference_builder
+from .loaders import minimal_loader, loader_eh
 
 # Import mapping specs
-from .builders.mapping import (
-    ClassSpec,
-    PropertySpec,
-    classify_outgoing_properties,
-    process_literal_property,
-    process_class_property,
-    process_complex_property,
-)
+from .builders.mapping.class_spec import ClassSpec
+from .builders.mapping.property_spec import PropertySpec
 
 # Import utilities
 from .utils import (
@@ -23,8 +15,6 @@ from .utils import (
     PROPERTY_TYPES,
     PROPERTY_CHARACTERISTICS,
     toPythonType,
-    property_spec_to_string,
-    class_spec_to_string,
     OGMEncoder,
 )
 
@@ -41,16 +31,10 @@ __all__ = [
     # Mapping specs
     "ClassSpec",
     "PropertySpec",
-    "classify_outgoing_properties",
-    "process_literal_property",
-    "process_class_property",
-    "process_complex_property",
     # Utilities
     "FUNDAMENTAL_CONCEPTS",
     "PROPERTY_TYPES",
     "PROPERTY_CHARACTERISTICS",
     "toPythonType",
-    "property_spec_to_string",
-    "class_spec_to_string",
     "OGMEncoder",
 ]

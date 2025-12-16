@@ -58,7 +58,13 @@ class ClassSpec:
         Delegates to PropertySpec.to_pydantic_field() for consistent field generation.
         """
         fields: Dict[str, tuple[Any, Any]] = {}
-
+        
+        # Only add id field for named classes (not blank nodes)
+        if self.iri:
+            fields["id"] = (IRI, pd.Field(..., description="IRI of the instance"))
+        else:
+            logger.info("ClassSpec has no IRI; this is a blank node that will not be a standalone node.")
+        
         for prop_iri, prop_spec in self.properties.items():
             # Use sanitized IRI for field names
             field_name = prop_iri.lined

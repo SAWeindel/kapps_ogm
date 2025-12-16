@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, Optional
 import logging
 import pydantic as pd
+from pydantic import ValidationError
 
 from graph_db_interface import GraphDB, IRI
 
@@ -195,25 +196,83 @@ class OGM:
             class_iri=class_iri,
             property_chains=property_chains if property_chains else None,
         )
-        if instance_iri and self.db.iri_exists(instance_iri):
-            raise ValueError(
-                f"Instance IRI {instance_iri} already exists in the database. use fetch instead of create."
-            )
 
+        # Build Pydantic model from class_spec
+        ModelCls = class_spec.to_pydantic_model()
+
+        # Extract ID from data or use provided instance_iri
+        raw_id = data.get("id")
         if instance_iri:
+            if self.db.iri_exists(instance_iri):
+                raise ValueError(
+                    f"Instance IRI {instance_iri} already exists in the database. use fetch instead of create."
+                )
             id = instance_iri
+        elif raw_id is not None:
+            id = IRI(raw_id) if not isinstance(raw_id, IRI) else raw_id
         else:
-            base = str(class_iri.onto) + "_instance_"
-            id = self.db.new_iri(base=base)
+            id = self.db.new_iri(base=str(class_iri.onto) + "_instance")
+
+        # Prepare payload with id and auto-generate nested IDs
+        payload = {**data, "id": id}
+        self._inject_missing_ids(payload, class_spec)
+
+        # Validate and instantiate Pydantic model
+        try:
+            instance = ModelCls(**payload)
+        except ValidationError as e:
+            raise ValueError(f"Instance validation failed: {e}") from e
 
         node = Node(
             id=id,
             class_spec=class_spec,
-            data=data,
+            instance=instance,
             ogm=self,
         )
 
         return node
+
+    def _inject_missing_ids(self, data: dict, class_spec: ClassSpec) -> None:
+        """
+        Recursively inject missing IDs into nested objects that require them.
+        
+        Args:
+            data: The data dictionary to inject IDs into (modified in place)
+            class_spec: The ClassSpec defining the structure
+        """
+        for prop_iri, prop_spec in class_spec.properties.items():
+            field_name = prop_iri.lined
+            
+            if field_name not in data:
+                continue
+                
+            value = data[field_name]
+            if value is None:
+                continue
+            
+            # Handle lists
+            values = value if isinstance(value, list) else [value]
+            
+            for item in values:
+                if not isinstance(item, dict):
+                    continue
+                
+                # Check if this property has a nested ClassSpec with an IRI (named class)
+                if prop_spec.nested and prop_spec.nested.iri:
+                    # Named class needs an ID
+                    if "id" not in item:
+                        # Use the namespace from the nested class IRI without adding separator
+                        # new_iri() will add the uuid automatically
+                        nested_iri = prop_spec.nested.iri
+                        base= str(nested_iri.onto) + "_instance_"
+                        
+                        item["id"] = self.db.new_iri(base=base)
+                    
+                    # Recurse into nested object
+                    self._inject_missing_ids(item, prop_spec.nested)
+                elif prop_spec.nested and not prop_spec.nested.iri:
+                    # Anonymous/blank node - no ID needed, but recurse for deeper nesting
+                    self._inject_missing_ids(item, prop_spec.nested)
 
     # ------------------------------------------------------------------
     # Loader / materialization

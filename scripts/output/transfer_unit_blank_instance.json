@@ -1,4 +1,5 @@
 {
+  "id": "http://example.org/instances/TransferUnit1",
   "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorBelt": [
     {
       "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorPosition": [

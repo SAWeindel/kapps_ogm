@@ -74,6 +74,10 @@
     },
     "https_www_sfb1574_kit_edu_ontologies_TransferUnit_ConveyorBelt": {
       "properties": {
+        "id": {
+          "description": "IRI of the instance",
+          "title": "Id"
+        },
         "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorPosition": {
           "anyOf": [
             {
@@ -107,11 +111,18 @@
           "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed"
         }
       },
+      "required": [
+        "id"
+      ],
       "title": "https_www_sfb1574_kit_edu_ontologies_TransferUnit_ConveyorBelt",
       "type": "object"
     },
     "https_www_sfb1574_kit_edu_ontologies_TransferUnit_LightBarrier": {
       "properties": {
+        "id": {
+          "description": "IRI of the instance",
+          "title": "Id"
+        },
         "https_www_sfb1574_kit_edu_ontologies_TransferUnit_isOccupied": {
           "anyOf": [
             {
@@ -129,11 +140,18 @@
           "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied"
         }
       },
+      "required": [
+        "id"
+      ],
       "title": "https_www_sfb1574_kit_edu_ontologies_TransferUnit_LightBarrier",
       "type": "object"
     }
   },
   "properties": {
+    "id": {
+      "description": "IRI of the instance",
+      "title": "Id"
+    },
     "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorBelt": {
       "anyOf": [
         {
@@ -167,6 +185,9 @@
       "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"
     }
   },
+  "required": [
+    "id"
+  ],
   "title": "https_www_sfb1574_kit_edu_ontologies_TransferUnit_TransferUnit",
   "type": "object"
 }

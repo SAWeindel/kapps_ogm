@@ -199,8 +199,11 @@ class OGM:
         if instance_iri and self.db.iri_exists(instance_iri):
             raise ValueError(f"Instance IRI {instance_iri} already exists in the database. use fetch instead of create.") 
         
-        base = str(class_iri) + "_instance_" or instance_iri
-        id = self.db.new_iri(base=base)
+        if instance_iri:
+            id = instance_iri
+        else:
+            base = str(class_iri) + "_instance_"
+            id = self.db.new_iri(base=base)
 
         node = Node(
             id=None,

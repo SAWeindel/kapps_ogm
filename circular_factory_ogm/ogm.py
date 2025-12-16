@@ -19,7 +19,7 @@ from circular_factory_ogm.utils.blank_instance import (
 
 class OGM:
     """
-    Object–Graph Mapper coordinating:
+    Object-Graph Mapper coordinating:
 
     - Schema resolution (ClassSpec)
     - Instance loading from RDF
@@ -37,6 +37,7 @@ class OGM:
         *,
         db: GraphDB,
         loader: Callable[[Node], Dict[str, Any]],
+        node_naming_schema: Optional[Callable[[IRI], IRI]] = None,
         logger: Optional[logging.Logger] = None,
     ):
         """
@@ -46,6 +47,11 @@ class OGM:
         """
         self.db = db
         self._loader = loader
+        self.node_naming_schema = node_naming_schema or (
+            lambda class_iri: self.db.new_iri(
+                base=f"{class_iri.onto}Instances#{class_iri.fragment}_"
+            )
+        )
         self.logger = logger or logging.getLogger("cf_ogm")
 
     # ------------------------------------------------------------------
@@ -180,7 +186,6 @@ class OGM:
         data: dict,
         property_chains: Optional[list[list[IRI]]] = None,
         instance_iri: Optional[IRI] = None,
-        node_naming_schema: Optional[Callable[[], str]] = None,
     ) -> Node:
         """
         Create a new Node instance with given data.
@@ -211,7 +216,7 @@ class OGM:
         elif raw_id is not None:
             id = IRI(raw_id) if not isinstance(raw_id, IRI) else raw_id
         else:
-            id = self.db.new_iri(base=str(class_iri.onto) + "_instance")
+            id = self.node_naming_schema(class_iri)
 
         # Prepare payload with id and auto-generate nested IDs
         payload = {**data, "id": id}
@@ -235,28 +240,28 @@ class OGM:
     def _inject_missing_ids(self, data: dict, class_spec: ClassSpec) -> None:
         """
         Recursively inject missing IDs into nested objects that require them.
-        
+
         Args:
             data: The data dictionary to inject IDs into (modified in place)
             class_spec: The ClassSpec defining the structure
         """
         for prop_iri, prop_spec in class_spec.properties.items():
             field_name = prop_iri.lined
-            
+
             if field_name not in data:
                 continue
-                
+
             value = data[field_name]
             if value is None:
                 continue
-            
+
             # Handle lists
             values = value if isinstance(value, list) else [value]
-            
+
             for item in values:
                 if not isinstance(item, dict):
                     continue
-                
+
                 # Check if this property has a nested ClassSpec with an IRI (named class)
                 if prop_spec.nested and prop_spec.nested.iri:
                     # Named class needs an ID
@@ -264,10 +269,8 @@ class OGM:
                         # Use the namespace from the nested class IRI without adding separator
                         # new_iri() will add the uuid automatically
                         nested_iri = prop_spec.nested.iri
-                        base= str(nested_iri.onto) + "_instance_"
-                        
-                        item["id"] = self.db.new_iri(base=base)
-                    
+                        item["id"] = self.node_naming_schema(nested_iri)
+
                     # Recurse into nested object
                     self._inject_missing_ids(item, prop_spec.nested)
                 elif prop_spec.nested and not prop_spec.nested.iri:

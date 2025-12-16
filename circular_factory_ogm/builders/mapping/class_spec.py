@@ -248,11 +248,11 @@ class ClassSpec:
             if range_types:
                 match range_types[0]:
                     case "literal":
-                        property_spec = PropertySpec.specify_literal(ogm, prop)
+                        property_spec = PropertySpec.specify_literal_property(ogm, prop)
                     case "class":
-                        property_spec = PropertySpec.specify_class(ogm, prop)
+                        property_spec = PropertySpec.specify_class_property(ogm, prop)
                     case "complex":
-                        property_spec = PropertySpec.specify_complex(ogm, prop)
+                        property_spec = PropertySpec.specify_complex_property(ogm, prop)
                     case _:
                         logging.warning(f"Unknown range type for property {prop}")
 

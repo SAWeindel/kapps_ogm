@@ -86,7 +86,7 @@ class OGM:
         property_chains: Optional[list[list[IRI]]] = None,
     ) -> Node:
         """
-        Fetch an existing RDF instance and return a Node.
+        Fetch an existing RDF instance from the database and return a Node.
 
         This is the primary entry point for:
         - REST GET
@@ -112,7 +112,7 @@ class OGM:
     def _resolve_instance_type(
         self,
         instance_iri: IRI,
-    ) -> IRI:
+    ) -> IRI: #TODO: Do we need this? and if yes maybe move to graphdb interface 
         """
         Resolve rdf:type of an instance.
 
@@ -171,6 +171,46 @@ class OGM:
             class_iri=class_iri,
             property_chains=property_chains,
         )
+        
+    def create(
+        self,
+        *,
+        class_iri: IRI,
+        data:dict,
+        property_chains: Optional[list[list[IRI]]] = None,
+        instance_iri: Optional[IRI] = None,
+        node_naming_schema: Optional[Callable[[], str]] = None,
+    ) -> Node:
+        
+        """
+        Create a new Node instance with given data.
+
+        This is the primary entry point for:
+        - REST POST
+        - API writes
+        - JSON import
+        """
+        self.logger.info("Creating new instance of class %s", class_iri)
+
+        class_spec = self.get_class_spec(
+            class_iri=class_iri,
+            property_chains=property_chains if property_chains else None,
+        )
+        if instance_iri and self.db.iri_exists(instance_iri):
+            raise ValueError(f"Instance IRI {instance_iri} already exists in the database. use fetch instead of create.") 
+        
+        base = str(class_iri) + "_instance_" or instance_iri
+        id = self.db.new_iri(base=base)
+
+        node = Node(
+            id=None,
+            class_spec=class_spec,
+            data=data,
+            ogm=self,
+        )
+
+        return node
+   
 
     # ------------------------------------------------------------------
     # Loader / materialization

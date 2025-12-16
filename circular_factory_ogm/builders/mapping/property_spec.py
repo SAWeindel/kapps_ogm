@@ -118,7 +118,7 @@ class PropertySpec:
         return field_type, field
 
     @classmethod
-    def specify_literal(
+    def specify_literal_property(
         cls,
         ogm: "OGM",
         prop: IRI,
@@ -150,7 +150,7 @@ class PropertySpec:
         return property_spec
 
     @classmethod
-    def specify_class(
+    def specify_class_property(
         cls,
         ogm: "OGM",
         prop: IRI,
@@ -179,7 +179,7 @@ class PropertySpec:
         return property_spec
 
     @classmethod
-    def specify_complex(
+    def specify_complex_property(
         cls,
         ogm: "OGM",
         prop: IRI,

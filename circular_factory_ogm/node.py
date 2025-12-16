@@ -3,8 +3,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, TypeVar, Union
 
 from pydantic import BaseModel, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
-from graph_db_interface import IRI
-from uuid import uuid4
+from graph_db_interface import IRI, Triple, to_literal
 
 
 if TYPE_CHECKING:
@@ -107,7 +106,7 @@ class Node:
 
     def to_triples(
         self,
-    ) -> set[tuple[IRI, IRI, Union[IRI, Any]]]:
+    ) -> set[Triple]:
         """
         Serialize this Node's instance into RDF triples.
 
@@ -120,7 +119,7 @@ class Node:
         if self.class_spec is None:
             raise RuntimeError("Node must have a ClassSpec to serialize to triples")
 
-        triples: set[tuple[IRI, IRI, Union[IRI, Any]]] = set()
+        triples: set[Triple] = set()
 
         subject = self.id
         if subject is None:
@@ -152,19 +151,18 @@ class Node:
 
     def _value_to_triples(
         self,
-        *,
         subject: IRI,
         predicate: IRI,
         value: Any,
-    ) -> set[tuple[IRI, IRI, Union[IRI, Any]]]:
+    ) -> set[Triple]:
         """
         Convert a single property value into triples.
         """
-        triples: set[tuple[IRI, IRI, Union[IRI, Any]]] = set()
+        triples: set[Triple] = set()
 
         # Case 1: Nested Pydantic object
         if isinstance(value, BaseModel):
-            bnode = IRI(f"_:{uuid4().hex}")
+            bnode = IRI(f"_:{self.ogm.db.new_blank_id()}")
             triples.add((subject, predicate, bnode))
 
             # Recurse
@@ -182,7 +180,7 @@ class Node:
 
         # Case 3: Literal
         else:
-            triples.add((subject, predicate, value))
+            triples.add((subject, predicate, to_literal(value)))
 
         return triples
 

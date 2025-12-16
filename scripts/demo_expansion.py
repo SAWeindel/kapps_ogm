@@ -2,6 +2,8 @@ import os
 import logging
 import json
 
+import uvicorn
+import aas_middleware as aas
 from graph_db_interface import GraphDBCredentials, GraphDB, IRI
 
 from circular_factory_ogm.ogm import OGM
@@ -23,6 +25,42 @@ property_chains = [
         IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"),
     ],
 ]
+
+mock_data = {
+    "id": "https://example.org/instances/transferUnit_1",
+    "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorBelt": [
+        {
+            "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorPosition": [
+                {
+                    "https_www_sfb1574_kit_edu_ontologies_inf_hasValue": [1.25],
+                    "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": [
+                        "https://example.org/units/meter"
+                    ],
+                }
+            ],
+            "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorSpeed": [
+                {
+                    "https_www_sfb1574_kit_edu_ontologies_inf_hasValue": [0.75],
+                    "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": [
+                        "https://example.org/units/meter_per_second"
+                    ],
+                }
+            ],
+        }
+    ],
+    "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasLightBarrier": [
+        {
+            "https_www_sfb1574_kit_edu_ontologies_TransferUnit_isOccupied": [
+                {
+                    "https_www_sfb1574_kit_edu_ontologies_inf_hasValue": [False],
+                    "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": [
+                        "https://example.org/units/boolean"
+                    ],
+                }
+            ]
+        }
+    ],
+}
 
 
 def main():
@@ -68,6 +106,34 @@ def main():
     print(blank_instance.model_dump_json(indent=2))
     with open(os.path.join(PATH, "output/transfer_unit_blank_instance.json"), "w") as f:
         f.write(blank_instance.model_dump_json(indent=2))
+
+    node1 = ogm.create(
+        class_iri=NODE_ID,
+        data=mock_data,
+        property_chains=property_chains,
+    )
+    node2 = ogm.create(
+        class_iri=NODE_ID,
+        data=mock_data,
+        property_chains=property_chains,
+    )
+    node1.materialize()
+    node2.materialize()
+
+    middleware = aas.AasMiddleware()
+    middleware.load_data_model(
+        name=node1.id,
+        data_model=aas.DataModel.from_models(node1.instance),
+        persist_instances=True,
+    )
+    middleware.load_data_model(
+        name=node2.id,
+        data_model=aas.DataModel.from_models(node2.instance),
+        persist_instances=True,
+    )
+    middleware.generate_rest_api_for_data_model(node1.id)
+    middleware.generate_rest_api_for_data_model(node2.id)
+    uvicorn.run(middleware.app)
 
 
 if __name__ == "__main__":

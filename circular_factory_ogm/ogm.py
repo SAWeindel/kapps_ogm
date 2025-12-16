@@ -112,7 +112,7 @@ class OGM:
     def _resolve_instance_type(
         self,
         instance_iri: IRI,
-    ) -> IRI: #TODO: Do we need this? and if yes maybe move to graphdb interface 
+    ) -> IRI:  # TODO: Do we need this? and if yes maybe move to graphdb interface
         """
         Resolve rdf:type of an instance.
 
@@ -171,17 +171,16 @@ class OGM:
             class_iri=class_iri,
             property_chains=property_chains,
         )
-        
+
     def create(
         self,
         *,
         class_iri: IRI,
-        data:dict,
+        data: dict,
         property_chains: Optional[list[list[IRI]]] = None,
         instance_iri: Optional[IRI] = None,
         node_naming_schema: Optional[Callable[[], str]] = None,
     ) -> Node:
-        
         """
         Create a new Node instance with given data.
 
@@ -197,23 +196,24 @@ class OGM:
             property_chains=property_chains if property_chains else None,
         )
         if instance_iri and self.db.iri_exists(instance_iri):
-            raise ValueError(f"Instance IRI {instance_iri} already exists in the database. use fetch instead of create.") 
-        
+            raise ValueError(
+                f"Instance IRI {instance_iri} already exists in the database. use fetch instead of create."
+            )
+
         if instance_iri:
             id = instance_iri
         else:
-            base = str(class_iri) + "_instance_"
+            base = str(class_iri.onto) + "_instance_"
             id = self.db.new_iri(base=base)
 
         node = Node(
-            id=None,
+            id=id,
             class_spec=class_spec,
             data=data,
             ogm=self,
         )
 
         return node
-   
 
     # ------------------------------------------------------------------
     # Loader / materialization

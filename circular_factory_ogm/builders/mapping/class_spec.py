@@ -34,7 +34,7 @@ class ClassSpec:
 
         return class_spec_to_string(self)
 
-    def hydrate(self, ogm: "OGM") -> "ClassSpec":
+    def hydrate(self, ogm: "OGM") -> ClassSpec:
         """
         Populate this ClassSpec with all details from the ontology.
         Uses `specify` internally and updates this instance in place.
@@ -106,8 +106,10 @@ class ClassSpec:
         if IRI("owl:Class") not in class_types and IRI("rdfs:Class") not in class_types:
             raise ValueError(f"IRI {class_iri} is not an OWL/RDFS Class.")
 
-        class_spec = cls(iri=class_iri)
-        class_spec.types = class_types
+        class_spec = cls(
+            iri=class_iri,
+            types=class_types,
+        )
 
         label_triples = db.triples_get(
             sub=class_iri, pred="rdfs:label", include_implicit=True

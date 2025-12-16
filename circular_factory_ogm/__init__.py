@@ -11,7 +11,6 @@ from .builders.mapping.property_spec import PropertySpec
 
 # Import utilities
 from .utils import (
-    FUNDAMENTAL_CONCEPTS,
     PROPERTY_TYPES,
     PROPERTY_CHARACTERISTICS,
     OGMEncoder,
@@ -31,7 +30,6 @@ __all__ = [
     "ClassSpec",
     "PropertySpec",
     # Utilities
-    "FUNDAMENTAL_CONCEPTS",
     "PROPERTY_TYPES",
     "PROPERTY_CHARACTERISTICS",
     "OGMEncoder",

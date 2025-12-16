@@ -126,12 +126,9 @@ class Node:
         if subject is None:
             raise RuntimeError("Node has no IRI")
 
-        # Add rdf:type triple for the class
-        from .utils.constants import FUNDAMENTAL_CONCEPTS as fc
-
         if self.class_spec.iri:
-            triples.add((subject, fc["RDF_TYPE"], self.class_spec.iri))
-            triples.add((subject, fc["RDF_TYPE"], fc["OWL_NAMED_INDIVIDUAL"]))
+            triples.add((subject, "rdf:type", self.class_spec.iri))
+            triples.add((subject, "rdf:type", "owl:NamedIndividual"))
 
         model = self.instance
         iri_field_map: dict[str, IRI] = getattr(model.__class__, "_iri_fields", {})

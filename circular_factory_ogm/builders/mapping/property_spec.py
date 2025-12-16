@@ -6,8 +6,6 @@ from graph_db_interface import IRI, XSDToPythonTypes
 import logging
 from pydantic import BeforeValidator, Field, conlist
 
-from circular_factory_ogm.utils.constants import FUNDAMENTAL_CONCEPTS as fc
-
 if TYPE_CHECKING:
     from circular_factory_ogm.builders.mapping.class_spec import ClassSpec
     from circular_factory_ogm.ogm import OGM
@@ -124,7 +122,7 @@ class PropertySpec:
         prop: IRI,
     ) -> PropertySpec:
         triples = ogm.db.triples_get(
-            sub=prop, pred=fc["RDFS_RANGE"], include_implicit=True
+            sub=prop, pred=IRI("rdfs:range"), include_implicit=True
         )
         range_iris = [triple[2] for triple in triples]
         if len(range_iris) > 1:
@@ -158,7 +156,7 @@ class PropertySpec:
         from .class_spec import ClassSpec
 
         triples = ogm.db.triples_get(
-            sub=prop, pred=fc["RDFS_RANGE"], include_implicit=True
+            sub=prop, pred=IRI("rdfs:range"), include_implicit=True
         )
         range_iris = [triple[2] for triple in triples]
         if len(range_iris) > 1:
@@ -207,7 +205,7 @@ class PropertySpec:
             ?effectiveMinCardinality ?effectiveMaxCardinality
             ?intersectionList ?unionList ?complementClass ?oneOfList
         WHERE {{
-            <{str(prop)}> <http://www.w3.org/2000/01/rdf-schema#range> ?range .
+            {prop.n3()} <http://www.w3.org/2000/01/rdf-schema#range> ?range .
 
             # IntersectionOf members
             OPTIONAL {{

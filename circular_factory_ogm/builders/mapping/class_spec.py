@@ -8,7 +8,6 @@ import pydantic as pd
 from graph_db_interface import IRI
 from circular_factory_ogm.utils.pretty_print import class_spec_to_string
 from circular_factory_ogm.utils.constants import (
-    FUNDAMENTAL_CONCEPTS as fc,
     PROPERTY_TYPES,
     PROPERTY_CHARACTERISTICS,
 )
@@ -102,18 +101,16 @@ class ClassSpec:
         db = ogm.db
 
         # first we get all types of the class
-        triples = db.triples_get(
-            sub=class_iri, pred=fc["RDF_TYPE"], include_implicit=True
-        )
+        triples = db.triples_get(sub=class_iri, pred="rdf:type", include_implicit=True)
         class_types = [triple[2] for triple in triples]
-        if fc["OWL_CLASS"] not in class_types and fc["RDFS_CLASS"] not in class_types:
+        if IRI("owl:Class") not in class_types and IRI("rdfs:Class") not in class_types:
             raise ValueError(f"IRI {class_iri} is not an OWL/RDFS Class.")
 
         class_spec = cls(iri=class_iri)
         class_spec.types = class_types
 
         label_triples = db.triples_get(
-            sub=class_iri, pred=fc["RDFS_LABEL"], include_implicit=True
+            sub=class_iri, pred="rdfs:label", include_implicit=True
         )
         if label_triples:
             class_spec.label = str(label_triples[0][2])
@@ -121,7 +118,7 @@ class ClassSpec:
         superclasses = [
             triple[2]
             for triple in db.triples_get(
-                sub=class_iri, pred=fc["RDFS_SUBCLASS_OF"], include_implicit=True
+                sub=class_iri, pred="rdfs:subClassOf", include_implicit=True
             )
         ]
         if class_iri in superclasses:
@@ -193,7 +190,7 @@ class ClassSpec:
         properties = [
             triple[0]
             for triple in db.triples_get(
-                pred=fc["RDFS_DOMAIN"], obj=class_iri, include_implicit=True
+                pred="rdfs:domain", obj=class_iri, include_implicit=True
             )
         ]
         property_spec_dict: dict[IRI, PropertySpec] = {}
@@ -201,7 +198,7 @@ class ClassSpec:
             ### first we categorize the property regarding its type and characteristics
             # query for property type
             query_result = db.triples_get(
-                sub=prop, pred=fc["RDF_TYPE"], include_implicit=False
+                sub=prop, pred="rdf:type", include_implicit=False
             )
             property_types = [triple[2] for triple in query_result]
 
@@ -222,19 +219,26 @@ class ClassSpec:
             sparql_query = f"""
             SELECT ?rangeType
             WHERE {{
-                BIND(<{str(prop)}> AS ?property) .
-                ?property <{fc['RDFS_RANGE']}> ?range .
-                BIND(IF(EXISTS {{ ?range <{fc['RDF_TYPE']}> <http://www.w3.org/2000/01/rdf-schema#Datatype> }}, "literal",
-                    IF(EXISTS {{ ?range <{fc['RDF_TYPE']}> <http://www.w3.org/2002/07/owl#DatatypeProperty> }}, "literal",
-                    IF((EXISTS {{ ?range <{fc['RDF_TYPE']}> <{fc['OWL_CLASS']}> }} || EXISTS {{ ?range <{fc['RDF_TYPE']}> <http://www.w3.org/2000/01/rdf-schema#Class> }} ) && isIRI(?range), "class",
-                    IF(EXISTS {{ ?range <{fc['RDF_TYPE']}> <http://www.w3.org/2002/07/owl#Restriction> }}
+                BIND({prop.n3()} AS ?property) .
+                ?property <http://www.w3.org/2000/01/rdf-schema#range> ?range .
+                BIND(
+                    IF( EXISTS {{ ?range <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2000/01/rdf-schema#Datatype> }}
+                        || EXISTS {{ ?range <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#DatatypeProperty> }} ,
+                        "literal" ,
+                    IF(( EXISTS {{ ?range <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Class> }}
+                         || EXISTS {{ ?range <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2000/01/rdf-schema#Class> }}
+                       ) && isIRI(?range) ,
+                        "class" ,
+                    IF( EXISTS {{ ?range <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Restriction> }}
                         || EXISTS {{ ?range <http://www.w3.org/2002/07/owl#intersectionOf> ?x }}
                         || EXISTS {{ ?range <http://www.w3.org/2002/07/owl#unionOf> ?y }}
                         || EXISTS {{ ?range <http://www.w3.org/2002/07/owl#complementOf> ?z }}
-                        || EXISTS {{ ?range <http://www.w3.org/2002/07/owl#oneOf> ?w }},
-                        "complex",
+                        || EXISTS {{ ?range <http://www.w3.org/2002/07/owl#oneOf> ?w }} ,
+                        "complex" ,
+                    # DEFAULT
                         "unknown"
-                    )))) AS ?rangeType)
+                    ))) AS ?rangeType
+                )
             }}
             """
 

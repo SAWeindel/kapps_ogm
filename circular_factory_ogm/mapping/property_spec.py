@@ -31,7 +31,7 @@ class PropertySpec:
         return False
 
     def to_string(self) -> str:
-        from ...utils.pretty_print import property_spec_to_string
+        from ..utils.pretty_print import property_spec_to_string
 
         return property_spec_to_string(self)
 
@@ -335,5 +335,5 @@ class PropertySpec:
         if property_spec.nested is not None:
             property_spec.nested._hydrated = True
 
-        print(f"Complex property {prop} processed: {property_spec.to_string()}")
+        #print(f"Complex property {prop} processed: {property_spec.to_string()}")
         return property_spec

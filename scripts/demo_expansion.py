@@ -33,16 +33,14 @@ mock_data = {
             "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorPosition": [
                 {
                     "https_www_sfb1574_kit_edu_ontologies_inf_hasValue": [1.25],
-                    "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": [
-                        "https://example.org/units/meter"
-                    ],
+                    "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": ["meters"],
                 }
             ],
             "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorSpeed": [
                 {
                     "https_www_sfb1574_kit_edu_ontologies_inf_hasValue": [0.75],
                     "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": [
-                        "https://example.org/units/meter_per_second"
+                        "meter_per_second"
                     ],
                 }
             ],
@@ -53,9 +51,7 @@ mock_data = {
             "https_www_sfb1574_kit_edu_ontologies_TransferUnit_isOccupied": [
                 {
                     "https_www_sfb1574_kit_edu_ontologies_inf_hasValue": [False],
-                    "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": [
-                        "https://example.org/units/boolean"
-                    ],
+                    "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": ["boolean"],
                 }
             ]
         }
@@ -65,7 +61,7 @@ mock_data = {
 
 def main():
     logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.ERROR)
 
     credentials = GraphDBCredentials(
         base_url="https://graphdb.iam-mms.kit.edu/",
@@ -74,7 +70,7 @@ def main():
         repository="OGM",
     )
     db = GraphDB(credentials=credentials)
-    db.logger.setLevel(logging.INFO)
+    db.logger.setLevel(logging.ERROR)
     # Refactored OGM: pass loader only
     ogm = OGM(db=db, loader=loader_eh)
 
@@ -82,16 +78,16 @@ def main():
     class_spec = ClassSpec.specify(
         class_iri=NODE_ID, ogm=ogm, property_chains=property_chains
     )
-    print("TransferUnit ClassSpec (fully hydrated):")
-    print(class_spec.to_string())
+    # print("TransferUnit ClassSpec (fully hydrated):")
+    # print(class_spec.to_string())
     with open(os.path.join(PATH, "output/transfer_unit_class_spec.txt"), "w") as f:
         f.write(class_spec.to_string())
 
     # Create Pydantic model from fully hydrated ClassSpec and dump JSON Schema
     model_cls = class_spec.to_pydantic_model()
     schema = model_cls.model_json_schema()
-    print("\nTransferUnit Pydantic JSON Schema (with nested classes):")
-    print(json.dumps(schema, indent=2))
+    # print("\nTransferUnit Pydantic JSON Schema (with nested classes):")
+    # print(json.dumps(schema, indent=2))
     with open(os.path.join(PATH, "output/transfer_unit_json_schema.json"), "w") as f:
         json.dump(schema, f, indent=2)
 
@@ -102,8 +98,8 @@ def main():
         property_chains=property_chains,
         instance_iri="http://example.org/instances/TransferUnit1",
     )
-    print("\nBlank instance of TransferUnit with nested properties:")
-    print(blank_instance.model_dump_json(indent=2))
+    # print("\nBlank instance of TransferUnit with nested properties:")
+    # print(blank_instance.model_dump_json(indent=2))
     with open(os.path.join(PATH, "output/transfer_unit_blank_instance.json"), "w") as f:
         f.write(blank_instance.model_dump_json(indent=2))
 
@@ -119,6 +115,36 @@ def main():
     )
     node1.materialize()
     node2.materialize()
+
+    # Test to_triples
+    triples = node1.to_triples()
+    print("Generated triples:")
+    for s, p, o in triples:
+        print(f"  {s}")
+        print(f"    {p}")
+        print(f"      {o}")
+        print()
+    print(f"Total: {len(triples)} triples\n")
+
+    # Test to_json_ld
+    json_ld = node1.to_json_ld(
+        context={
+            "ex": "https://example.org/",
+            "tu": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#",
+            "tui": "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#",
+            "inf": "https://www.sfb1574.kit.edu/ontologies/inf#",
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "owl": "http://www.w3.org/2002/07/owl#",
+        }
+    )
+    print("\nJSON-LD representation:")
+    print(json.dumps(json_ld, indent=2))
+
+    print("\n JSON-LD Without Context:  ")
+    json_ld_no_context = node1.to_json_ld(context=None)
+    print(json.dumps(json_ld_no_context, indent=2))
+
+    # Exit early to avoid starting the server
 
     middleware = aas.AasMiddleware()
     middleware.load_data_model(

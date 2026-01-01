@@ -1,0 +1,339 @@
+from __future__ import annotations
+
+from typing import Optional, Type, TYPE_CHECKING, Any, Union, Annotated
+from dataclasses import dataclass
+from graph_db_interface import IRI, XSDToPythonTypes
+import logging
+from pydantic import BeforeValidator, Field, conlist
+
+if TYPE_CHECKING:
+    from circular_factory_ogm.mapping.class_spec import ClassSpec
+    from circular_factory_ogm.ogm import OGM
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PropertySpec:
+    iri: IRI
+    value_kind: str  # 'data' or 'object'
+    python_range_type: Optional[Type] = None
+    min_count: Optional[int] = None
+    max_count: Optional[int] = None
+    some_from: Optional[Union[IRI, Type]] = None
+    all_from: Optional[Union[IRI, Type]] = None
+    nested: Optional["ClassSpec"] = None
+
+    @property
+    def required(self) -> bool:
+        if self.min_count is not None and self.min_count >= 1:
+            return True
+        return False
+
+    def to_string(self) -> str:
+        from ...utils.pretty_print import property_spec_to_string
+
+        return property_spec_to_string(self)
+
+    def to_pydantic_field(self) -> tuple[Any, Any]:
+        """Convert this PropertySpec into a Pydantic field with validators."""
+
+        if self.value_kind == "literal":
+            # If all_from is set, use it as type restriction
+            if self.all_from:
+                if isinstance(self.all_from, IRI):
+                    raise ValueError(
+                        f"Literal property {self.iri} cannot have allValuesFrom as Object IRI"
+                    )
+                base_type = self.all_from
+            else:
+                base_type = self.python_range_type or Any
+        elif self.value_kind == "object":
+            # Nested hydrated class becomes Pydantic model; else fallback to IRI
+            if self.nested and getattr(self.nested, "_hydrated", False):
+                base_type = self.nested.to_pydantic_model()
+            else:
+                base_type = IRI
+        elif self.value_kind == "complex":
+            # Complex properties have nested ClassSpec that should be converted to Pydantic model
+            if self.nested:
+                base_type = self.nested.to_pydantic_model()
+            else:
+                base_type = Any
+        else:
+            raise ValueError(f"Unknown value_kind: {self.value_kind}")
+
+        # cardinality
+        min_count = self.min_count or 0
+        max_count = self.max_count
+
+        # Always treat multiple cardinality as list
+        is_multi = max_count is None or max_count > 1 or min_count > 1
+        if is_multi:
+            field_type = conlist(base_type, min_length=min_count, max_length=max_count)
+        else:
+            field_type = base_type
+
+        # Apply some_from / all_from validators using Annotated types
+        if self.some_from or self.all_from:
+
+            def make_validator(some_type, all_type):
+                def validate(v):
+                    if v is None:
+                        return v
+                    values = v if isinstance(v, list) else [v]
+
+                    if some_type is not None:
+                        if not any(isinstance(x, some_type) for x in values):
+                            raise ValueError(
+                                f"Property {self.iri} requires at least one value of type {some_type}"
+                            )
+
+                    if all_type is not None:
+                        if not all(isinstance(x, all_type) for x in values):
+                            raise ValueError(
+                                f"Property {self.iri} requires all values to be of type {all_type}"
+                            )
+
+                    return v
+
+                return validate
+
+            validator = BeforeValidator(make_validator(self.some_from, self.all_from))
+            field_type = Annotated[field_type, validator]
+
+        # Wrap in Optional if not required
+        if not self.required:
+            field_type = Optional[field_type]
+
+        # Create Pydantic Field
+        field = Field(
+            default=... if self.required else None,
+            title=str(self.iri),
+            description=f"PropertySpec for {self.iri}",
+        )
+
+        return field_type, field
+
+    @classmethod
+    def specify_literal_property(
+        cls,
+        ogm: "OGM",
+        prop: IRI,
+    ) -> PropertySpec:
+        triples = ogm.db.triples_get(
+            sub=prop, pred=IRI("rdfs:range"), include_implicit=True
+        )
+        range_iris = [triple[2] for triple in triples]
+        if len(range_iris) > 1:
+            raise ValueError(
+                f"Literal property {prop} has multiple rdfs:range defined: {range_iris}"
+            )
+        if not range_iris:
+            raise ValueError(f"Literal property {prop} has no rdfs:range defined.")
+        range_iri = range_iris[0]
+        python_type = XSDToPythonTypes[range_iri]
+        property_spec = cls(
+            iri=prop,
+            value_kind="literal",
+            python_range_type=python_type,
+            required=False,
+            max_count=None,
+            min_count=None,
+            nested=None,
+        )
+        logger.warning(
+            f"Warning: The property {prop} has not been checked for OWL constraints yet. You might want to verify cardinality and existential constraints."
+        )
+        return property_spec
+
+    @classmethod
+    def specify_class_property(
+        cls,
+        ogm: "OGM",
+        prop: IRI,
+    ) -> PropertySpec:
+        from .class_spec import ClassSpec
+
+        triples = ogm.db.triples_get(
+            sub=prop, pred=IRI("rdfs:range"), include_implicit=True
+        )
+        range_iris = [triple[2] for triple in triples]
+        if len(range_iris) > 1:
+            raise ValueError(
+                f"Class property {prop} has multiple rdfs:range defined: {range_iris}"
+            )
+        if not range_iris:
+            raise ValueError(f"Class property {prop} has no rdfs:range defined.")
+        range_iri = range_iris[0]
+        property_spec = cls(
+            iri=prop,
+            value_kind="object",
+            python_range_type=None,  # Will be another ClassSpec
+            max_count=None,
+            min_count=None,
+            nested=ClassSpec(iri=range_iri),
+        )
+        return property_spec
+
+    @classmethod
+    def specify_complex_property(
+        cls,
+        ogm: "OGM",
+        prop: IRI,
+    ) -> PropertySpec:
+        """
+        Processes a complex OWL property and returns a PropertySpec with a nested ClassSpec
+        that includes intersection, union, complement, and enumerated restrictions.
+        """
+        from .class_spec import ClassSpec
+
+        # Initialize top-level PropertySpec
+        property_spec = cls(
+            iri=prop,
+            value_kind="complex",
+            python_range_type=None,
+            min_count=None,
+            max_count=None,
+            nested=None,
+        )
+
+        # SPARQL query to get range restrictions and structural elements
+        query = f"""SELECT
+            ?range ?restriction ?onProperty ?someValuesFrom ?allValuesFrom
+            ?minCardinality ?maxCardinality ?cardinality
+            ?effectiveMinCardinality ?effectiveMaxCardinality
+            ?intersectionList ?unionList ?complementClass ?oneOfList
+        WHERE {{
+            {prop.n3()} <http://www.w3.org/2000/01/rdf-schema#range> ?range .
+
+            # IntersectionOf members
+            OPTIONAL {{
+                ?range <http://www.w3.org/2002/07/owl#intersectionOf> ?intersectionList .
+                ?intersectionList <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first> ?restriction .
+                ?restriction a <http://www.w3.org/2002/07/owl#Restriction> .
+            }}
+
+            # UnionOf members
+            OPTIONAL {{
+                ?range <http://www.w3.org/2002/07/owl#unionOf> ?unionList .
+                ?unionList <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first> ?restriction .
+                ?restriction a <http://www.w3.org/2002/07/owl#Restriction> .
+            }}
+
+            # Restriction details
+            OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#onProperty> ?onProperty }}
+            OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#someValuesFrom> ?someValuesFrom }}
+            OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#allValuesFrom> ?allValuesFrom }}
+            OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#minCardinality> ?minCardinality }}
+            OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#maxCardinality> ?maxCardinality }}
+            OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#cardinality> ?cardinality }}
+
+            # Normalize cardinality
+            BIND(IF(BOUND(?cardinality), ?cardinality, ?minCardinality) AS ?effectiveMinCardinality)
+            BIND(IF(BOUND(?cardinality), ?cardinality, ?maxCardinality) AS ?effectiveMaxCardinality)
+
+            # Complement and enumeration
+            OPTIONAL {{ ?range <http://www.w3.org/2002/07/owl#complementOf> ?complementClass }}
+            OPTIONAL {{ ?range <http://www.w3.org/2002/07/owl#oneOf> ?oneOfList }}
+        }}"""
+
+        # Execute query
+        query_result = ogm.db.query(query)
+        bindings = query_result["results"]["bindings"]
+
+        if not bindings:
+            # No restrictions; treat as simple object with empty ClassSpec
+            property_spec.nested = ClassSpec(iri=None, properties={}, metadata={})
+            # Anonymous class is fully specified in-place
+            property_spec.nested._hydrated = True
+            return property_spec
+
+        # Initialize nested ClassSpec for the anonymous range
+        property_spec.nested = ClassSpec(
+            iri=None, label=None, properties={}, metadata={}  # Anonymous class
+        )
+
+        # Process each restriction
+        for restriction in bindings:
+            if "onProperty" in restriction:
+                nested_property = IRI(restriction["onProperty"]["value"])
+                nested_spec = cls(
+                    iri=nested_property,
+                    value_kind=(
+                        "literal"
+                        if "someValuesFrom" in restriction
+                        or "allValuesFrom" in restriction
+                        else "object"
+                    ),
+                    python_range_type=None,
+                    min_count=None,
+                    max_count=None,
+                    nested=None,
+                )
+
+                # Determine type and requiredness
+                if "someValuesFrom" in restriction:
+                    range_iri = IRI(restriction["someValuesFrom"]["value"])
+                    range_type = XSDToPythonTypes[range_iri]
+                    if range_type:
+                        nested_spec.some_from = range_type
+                    else:
+                        nested_spec.some_from = range_iri
+
+                    nested_spec.min_count = 1
+
+                elif "allValuesFrom" in restriction:
+                    nested_spec.python_range_type = XSDToPythonTypes[
+                        IRI(restriction["allValuesFrom"]["value"])
+                    ]
+
+                # Cardinality
+                if "effectiveMinCardinality" in restriction:
+                    nested_spec.min_count = int(
+                        restriction["effectiveMinCardinality"]["value"]
+                    )
+
+                if "effectiveMaxCardinality" in restriction:
+                    nested_spec.max_count = int(
+                        restriction["effectiveMaxCardinality"]["value"]
+                    )
+
+                # Add nested property to ClassSpec
+                property_spec.nested.properties[nested_property] = nested_spec
+
+                # Update metadata for intersectionOf
+                if "intersectionList" in restriction:
+                    if "intersectionOf" not in property_spec.nested.metadata:
+                        property_spec.nested.metadata["intersectionOf"] = []
+                    property_spec.nested.metadata["intersectionOf"].append(
+                        str(nested_property)
+                    )
+
+        # Store unionOf, complementOf, oneOf in metadata from first binding
+        if bindings:
+            first_binding = bindings[0]
+
+            if "unionList" in first_binding:
+                # Note: resolve_rdf_list method would need to be implemented in GraphDB
+                property_spec.nested.metadata["unionOf"] = first_binding["unionList"][
+                    "value"
+                ]
+
+            if "complementClass" in first_binding:
+                property_spec.nested.metadata["complementOf"] = first_binding[
+                    "complementClass"
+                ]["value"]
+
+            if "oneOfList" in first_binding:
+                # Note: resolve_rdf_list method would need to be implemented in GraphDB
+                property_spec.nested.metadata["oneOf"] = first_binding["oneOfList"][
+                    "value"
+                ]
+
+        # Mark anonymous nested class as hydrated since it was fully built here
+        if property_spec.nested is not None:
+            property_spec.nested._hydrated = True
+
+        print(f"Complex property {prop} processed: {property_spec.to_string()}")
+        return property_spec

@@ -6,8 +6,8 @@ from .builders import minimal_builder, reference_builder
 from .loaders import minimal_loader, loader_eh
 
 # Import mapping specs
-from .builders.mapping.class_spec import ClassSpec
-from .builders.mapping.property_spec import PropertySpec
+from .mapping.class_spec import ClassSpec
+from .mapping.property_spec import PropertySpec
 
 # Import utilities
 from .utils import (

@@ -7,7 +7,7 @@ from graph_db_interface import IRI, Triple, to_literal
 
 
 if TYPE_CHECKING:
-    from circular_factory_ogm.builders.mapping.class_spec import ClassSpec
+    from circular_factory_ogm.mapping.class_spec import ClassSpec
     from circular_factory_ogm.ogm import OGM
 
 T = TypeVar("T", bound=BaseModel)

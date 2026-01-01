@@ -8,8 +8,8 @@ from pydantic import ValidationError
 from graph_db_interface import GraphDB, IRI
 
 from circular_factory_ogm.node import Node
-from circular_factory_ogm.builders.mapping.class_spec import ClassSpec
-from circular_factory_ogm.builders.mapping.property_spec import PropertySpec
+from circular_factory_ogm.mapping.class_spec import ClassSpec
+from circular_factory_ogm.mapping.property_spec import PropertySpec
 from circular_factory_ogm.utils.blank_instance import (
     _create_blank_instance,
     _blank_instance_from_class_spec,
@@ -203,7 +203,7 @@ class OGM:
         )
 
         # Build Pydantic model from class_spec
-        ModelCls = class_spec.to_pydantic_model()
+        model_cls = class_spec.to_pydantic_model()
 
         # Extract ID from data or use provided instance_iri
         raw_id = data.get("id")
@@ -224,7 +224,7 @@ class OGM:
 
         # Validate and instantiate Pydantic model
         try:
-            instance = ModelCls(**payload)
+            instance = model_cls(**payload)
         except ValidationError as e:
             raise ValueError(f"Instance validation failed: {e}") from e
 

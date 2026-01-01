@@ -7,7 +7,7 @@ import aas_middleware as aas
 from graph_db_interface import GraphDBCredentials, GraphDB, IRI
 
 from circular_factory_ogm.ogm import OGM
-from circular_factory_ogm.builders.mapping.class_spec import ClassSpec
+from circular_factory_ogm.mapping.class_spec import ClassSpec
 from circular_factory_ogm.loaders.loader_eh import loader_eh
 
 PATH = os.path.dirname(os.path.abspath(__file__))

@@ -188,7 +188,7 @@ class ClassSpec:
 
         # Mark as hydrated if it was fully specified
         class_spec._hydrated = True
-        print(f"Specifying class {class_iri} as {class_spec.to_string()}")
+        
 
         return class_spec
 
@@ -277,8 +277,8 @@ class ClassSpec:
                 property_spec.max_count = 1
 
             if property_spec:
-                print(f"Processed property {prop}: {property_spec.to_string()}")
+                
                 property_spec_dict[prop] = property_spec
 
-        print(f"Final model data properties: {property_spec_dict}")
+        
         return property_spec_dict

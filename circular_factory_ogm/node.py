@@ -111,8 +111,27 @@ class Node:
             return self.data
         if not self.ogm:
             raise RuntimeError("No OGM attached to load data")
-        self.data = self.ogm.loader(self)
+        self.data = self.ogm._fetch_from_node(self)
         return self.data
+
+    def _validate_instance(self) -> BaseModel:
+        """
+        Validate and build a Pydantic instance from the node's loaded data.
+
+        Returns:
+            BaseModel: A validated Pydantic model instance.
+
+        Raises:
+            ValueError: If ClassSpec or data is missing.
+            ValidationError: If the loaded data violates the ClassSpec constraints.
+        """
+        if self.class_spec is None:
+            raise ValueError("Cannot create instance without ClassSpec")
+        if self.data is None:
+            raise ValueError("Cannot create instance without loaded data")
+
+        model_cls = self.class_spec.to_pydantic_model()
+        return model_cls.model_validate(self.data)
 
     def materialize(self, *, reload: bool = False) -> BaseModel:
         """
@@ -133,7 +152,7 @@ class Node:
             ClassSpec. The instance is cached on the node.
 
         Raises:
-            RuntimeError: If no OGM is attached to the node.
+            RuntimeError: If no OGM is attached to load data.
             ValidationError: If the loaded data violates the ClassSpec constraints.
 
         Notes:
@@ -141,13 +160,13 @@ class Node:
             - Modifications to the returned instance must be persisted explicitly
             via the OGM.
         """
-        if self.instance is not None:
+        if self.instance is not None and not reload:
             return self.instance
-        if not self.ogm:
-            raise RuntimeError("No OGM attached to build instance")
         if self.data is None or reload:
+            if not self.ogm:
+                raise RuntimeError("No OGM attached to load data")
             self.load_data(reload=reload)
-        self.instance = self.ogm.create_node_instance(self)
+        self.instance = self._validate_instance()
         return self.instance
 
     # -------------------------

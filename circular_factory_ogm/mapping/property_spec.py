@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PropertySpec:
     iri: IRI
-    value_kind: str  # 'data' or 'object'
+    value_kind: str  # 'data' or 'object' or 'complex'
     python_range_type: Optional[Type] = None
     min_count: Optional[int] = None
     max_count: Optional[int] = None

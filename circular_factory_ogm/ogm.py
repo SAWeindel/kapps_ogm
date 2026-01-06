@@ -140,6 +140,8 @@ class OGM:
         if persist:
             pass  # TODO: implement persistence logic here
 
+        return node
+
     def create_blank_instance(
         self,
         *,
@@ -178,7 +180,7 @@ class OGM:
         property_spec: PropertySpec,
         instance_iri: IRI,
         property_chain: Optional[list[IRI]] = None,
-        materialize: bool = False,
+        
     ) -> Optional[list[Any]]:
         """
         Helper method to fetch property data for a given property spec and instance IRI.
@@ -195,29 +197,27 @@ class OGM:
                 data.append([str(obj) for subj, pred, obj in query_result])
 
             elif property_spec.value_kind == "object":
-                if (
-                    property_chain is not None
-                ):  # if there is a property chain given, and we are at the first element of it, we need to expand further
-                    if property_chain[0] == property_spec.iri:
-                        property_chain.pop(
-                            0
-                        )  # we remove the first element and pass the rest down, call fetch recursively
-                        for subj, pred, obj in query_result:
-                            nested_instance = self.fetch(
-                                instance_iri=obj,
-                                property_chains=(
-                                    [property_chain]
-                                    if len(property_chain) > 0
-                                    else None
-                                ),
-                                as_reference=False,
-                                materialize=materialize,
-                            )
-                            data.append(nested_instance)
-                else:  # no property chain given, we treat the object just as reference
-                    nested_instance = self.fetch(instance_iri=obj, as_reference=True)
-                    data.append(nested_instance)
 
+                if (
+                    property_spec.nested is not None
+                ):  # recursively fetch nested objects according to nested class spec
+                    nested_class_spec = property_spec.nested
+                    for subj, pred, obj in query_result:
+                        data.append(
+                            self.fetch(
+                                instance_iri=obj,
+                                class_spec=nested_class_spec,
+                                
+                            )
+                        )
+                else:  # fetch as references only
+                    for subj, pred, obj in query_result:
+                        data.append(
+                            self.fetch(
+                                instance_iri=obj,
+                                as_reference=True,
+                            ).data
+                        )
             elif (
                 property_spec.value_kind == "complex"
             ):  # this is a property that has a range of complex type/bnode (ie due to union or intersection)
@@ -247,14 +247,18 @@ class OGM:
                 )
 
             return data
+    
+    
 
     def fetch(
         self,
         *,
         instance_iri: IRI,
         property_chains: Optional[list[list[IRI]]] = None,
+        class_spec: Optional[ClassSpec] = None,
         as_reference: bool = False,
         materialize: bool = False,
+        
     ) -> Node:
         """
         Fetch an existing RDF instance from the database and return a Node for that instance.
@@ -273,34 +277,31 @@ class OGM:
             else self._loader.expand(instance_iri) if self._loader else None
         )
         class_iri = self.db.owl_get_classes_of_individual(instance_iri)[0]
-        class_spec = self.get_class_spec(
-            class_iri=class_iri,
-            property_chains=property_chains,
-        )
-
+        if class_spec is None:
+            class_spec = self.get_class_spec(
+                class_iri=class_iri,
+                property_chains=property_chains,
+            )
+        else:
+            class_spec = class_spec
         data = {}
         data["id"] = str(instance_iri)  # every node must have an id at minimum
 
         if not as_reference:
             # Full fetch according to class spec (already filtered by property chains)
             for prop, prop_spec in class_spec.properties.items():
-                if property_chains is not None:
-                    for chain in property_chains:
-                        if len(chain) > 0 and chain[0] == prop_spec.iri:
-                            # pass the rest of the chain for nested fetching
-                            data[prop] = self._get_property_data(
-                                prop_spec,
-                                instance_iri=instance_iri,
-                                property_chain=chain,
-                                materialize=materialize,
-                            )
-                else:
-                    data[prop] = self._get_property_data(
-                        prop_spec, instance_iri=instance_iri, materialize=materialize
-                    )
+                prop_data = self._get_property_data(
+                    prop_spec, instance_iri=instance_iri, 
+                )
+                # Only include properties that have actual data (not None or empty list)
+                if prop_data:  # This excludes both None and []
+                    data[prop] = prop_data
         else:
             # As reference: keep only the id
             pass
+        
+        
+            
 
         node = Node(
             id=instance_iri,
@@ -309,6 +310,7 @@ class OGM:
             instance=None,  # instance can be materialized later if needed
             ogm=self,
         )
+
         if materialize:
             node.materialize()
         return node

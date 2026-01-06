@@ -1,6 +1,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Dict, Optional, TypeVar, Union
 from collections import defaultdict
+import json
+import logging
 
 from pydantic import BaseModel, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
@@ -62,6 +64,29 @@ class Node:
         self.data = data
         self.instance = instance
         self.ogm = ogm
+
+        # Pretty print data for debugging
+        logger = (
+            self.ogm.logger
+            if self.ogm and hasattr(self.ogm, "logger")
+            else logging.getLogger("cf_ogm")
+        )
+        if logger.isEnabledFor(logging.DEBUG) and self.data:
+
+            def convert_to_serializable(obj):
+                """Convert IRI and other non-serializable objects to strings."""
+                if isinstance(obj, (IRI, BNode)):
+                    return str(obj)
+                elif isinstance(obj, dict):
+                    return {
+                        convert_to_serializable(k): convert_to_serializable(v)
+                        for k, v in obj.items()
+                    }
+                elif isinstance(obj, list):
+                    return [convert_to_serializable(item) for item in obj]
+                return obj
+
+            logger.debug(json.dumps(convert_to_serializable(self.data), indent=2))
 
     # -------------------------
     # Lifecycle helpers
@@ -130,8 +155,23 @@ class Node:
         if self.data is None:
             raise ValueError("Cannot create instance without loaded data")
 
+        # Transform data keys from IRI objects to sanitized field names
+        transformed_data = {}
+        for key, value in self.data.items():
+            if isinstance(key, IRI):
+                # Use the sanitized field name that matches the Pydantic model
+                field_name = key.lined  # This should give us the sanitized name
+                transformed_data[field_name] = value
+            else:
+                # Keep non-IRI keys as-is (like 'id')
+                transformed_data[key] = value
+
         model_cls = self.class_spec.to_pydantic_model()
-        return model_cls.model_validate(self.data)
+        print("Expected fields:", model_cls.model_fields.keys())
+        print("Actual data keys:", transformed_data.keys())
+        validated_instance = model_cls.model_validate(transformed_data)
+        return validated_instance
+        
 
     def materialize(self, *, reload: bool = False) -> BaseModel:
         """
@@ -166,6 +206,18 @@ class Node:
             if not self.ogm:
                 raise RuntimeError("No OGM attached to load data")
             self.load_data(reload=reload)
+        for key, value in self.data.items():
+            if isinstance(value, list) and value and isinstance(value[0], Node):
+                # we encounter a list of nodes, that have to be materialized before building the instance
+                self.data[key] = [
+                    (
+                        v.materialize(reload=reload)
+                        if not v.is_materialized
+                        else v.instance
+                    )
+                    for v in value
+                ]
+            
         self.instance = self._validate_instance()
         return self.instance
 

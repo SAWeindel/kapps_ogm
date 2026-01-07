@@ -199,12 +199,32 @@ class ClassSpec:
     ) -> dict[IRI, PropertySpec]:
         db = ogm.db
 
-        properties = [
-            triple[0]
-            for triple in db.triples_get(
-                pred="rdfs:domain", obj=class_iri, include_implicit=True
-            )
-        ]
+        query = f"""
+            PREFIX onto: <http://www.ontotext.com/>
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+            SELECT ?property
+            FROM onto:explicit
+            WHERE {{
+                {{
+                    ?property rdfs:domain <{class_iri}> .
+                }}
+                UNION
+                {{
+                    ?property rdfs:domain ?union_class .
+                    ?union_class owl:unionOf ?list .
+                    ?list rdf:rest*/rdf:first <{class_iri}> .
+                    
+                }}
+            }}
+        """
+        properties = (
+            b["property"]
+            for b in db.query(query, convert_bindings=True)
+            .get("results", {})
+            .get("bindings", [])
+        )
+
         property_spec_dict: dict[IRI, PropertySpec] = {}
         for prop in properties:
             ### first we categorize the property regarding its type and characteristics
@@ -227,58 +247,13 @@ class ClassSpec:
                 elif ptype in PROPERTY_CHARACTERISTICS:
                     characteristics.append(PROPERTY_CHARACTERISTICS[ptype])
 
-            ### while the domain is clear (the node we are analyzing) the range needs to be analyzed
-            sparql_query = f"""
-            SELECT ?rangeType
-            WHERE {{
-                BIND({prop.n3()} AS ?property) .
-                ?property <http://www.w3.org/2000/01/rdf-schema#range> ?range .
-                BIND(
-                    IF( EXISTS {{ ?range <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2000/01/rdf-schema#Datatype> }}
-                        || EXISTS {{ ?range <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#DatatypeProperty> }} ,
-                        "literal" ,
-                    IF(( EXISTS {{ ?range <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Class> }}
-                         || EXISTS {{ ?range <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2000/01/rdf-schema#Class> }}
-                       ) && isIRI(?range) ,
-                        "class" ,
-                    IF( EXISTS {{ ?range <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Restriction> }}
-                        || EXISTS {{ ?range <http://www.w3.org/2002/07/owl#intersectionOf> ?x }}
-                        || EXISTS {{ ?range <http://www.w3.org/2002/07/owl#unionOf> ?y }}
-                        || EXISTS {{ ?range <http://www.w3.org/2002/07/owl#complementOf> ?z }}
-                        || EXISTS {{ ?range <http://www.w3.org/2002/07/owl#oneOf> ?w }} ,
-                        "complex" ,
-                    # DEFAULT
-                        "unknown"
-                    ))) AS ?rangeType
-                )
-            }}
-            """
-
-            query_result = db.query(sparql_query)
-            range_types = [
-                binding["rangeType"]["value"]
-                for binding in query_result["results"]["bindings"]
-            ]
-
-            property_spec = None
-            if range_types:
-                match range_types[0]:
-                    case "literal":
-                        property_spec = PropertySpec.specify_literal_property(ogm, prop)
-                    case "class":
-                        property_spec = PropertySpec.specify_class_property(ogm, prop)
-                    case "complex":
-                        property_spec = PropertySpec.specify_complex_property(ogm, prop)
-                    case _:
-                        logging.warning(f"Unknown range type for property {prop}")
+            property_spec = PropertySpec.specify_property(ogm, prop)
 
             # Apply characteristics to the property_spec if it exists
             if property_spec and "functional" in characteristics:
                 property_spec.max_count = 1
 
             if property_spec:
-                
                 property_spec_dict[prop] = property_spec
 
-        
         return property_spec_dict

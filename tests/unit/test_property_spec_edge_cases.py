@@ -14,7 +14,7 @@ from typing import Any
 
 from graph_db_interface import IRI
 from circular_factory_ogm.ogm import OGM
-from circular_factory_ogm.mapping.property_spec import PropertySpec
+from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from circular_factory_ogm.mapping.class_spec import ClassSpec
 
 
@@ -26,7 +26,7 @@ class TestPropertySpecCardinality:
         # Setup: Property with min_count = 2
         prop_spec = PropertySpec(
             iri=IRI("https://example.org/multiProp"),
-            value_kind="literal",
+            value_kind=PropertyValueKind.LITERAL,
             python_range_type=str,
             min_count=2,
             max_count=None,
@@ -45,7 +45,7 @@ class TestPropertySpecCardinality:
         # Setup: Property with max_count = 1 (functional)
         prop_spec = PropertySpec(
             iri=IRI("https://example.org/singleProp"),
-            value_kind="literal",
+            value_kind=PropertyValueKind.LITERAL,
             python_range_type=str,
             min_count=None,
             max_count=1,
@@ -60,7 +60,7 @@ class TestPropertySpecCardinality:
         # Setup: Exactly 3 values required
         prop_spec = PropertySpec(
             iri=IRI("https://example.org/exactProp"),
-            value_kind="literal",
+            value_kind=PropertyValueKind.LITERAL,
             python_range_type=int,
             min_count=3,
             max_count=3,
@@ -76,7 +76,7 @@ class TestPropertySpecCardinality:
         # Setup
         prop_spec = PropertySpec(
             iri=IRI("https://example.org/manyProp"),
-            value_kind="literal",
+            value_kind=PropertyValueKind.LITERAL,
             python_range_type=str,
             min_count=0,
             max_count=None,  # Unbounded
@@ -96,7 +96,7 @@ class TestPropertySpecDatatypes:
         # Setup
         prop_spec = PropertySpec(
             iri=IRI("https://example.org/nameProp"),
-            value_kind="literal",
+            value_kind=PropertyValueKind.LITERAL,
             python_range_type=str,
             min_count=None,
             max_count=None,
@@ -104,7 +104,7 @@ class TestPropertySpecDatatypes:
         )
 
         # Assert
-        assert prop_spec.value_kind == "literal"
+        assert prop_spec.value_kind is PropertyValueKind.LITERAL
         assert prop_spec.python_range_type == str
 
     def test_literal_property_with_numeric_type(self):
@@ -112,7 +112,7 @@ class TestPropertySpecDatatypes:
         # Setup: Integer property
         int_prop = PropertySpec(
             iri=IRI("https://example.org/countProp"),
-            value_kind="literal",
+            value_kind=PropertyValueKind.LITERAL,
             python_range_type=int,
             min_count=None,
             max_count=None,
@@ -132,7 +132,7 @@ class TestPropertySpecDatatypes:
 
         prop_spec = PropertySpec(
             iri=IRI("https://example.org/refProp"),
-            value_kind="object",
+            value_kind=PropertyValueKind.OBJECT,
             python_range_type=None,
             min_count=None,
             max_count=None,
@@ -140,7 +140,7 @@ class TestPropertySpecDatatypes:
         )
 
         # Assert
-        assert prop_spec.value_kind == "object"
+        assert prop_spec.value_kind is PropertyValueKind.OBJECT
         assert prop_spec.nested == nested_class
 
     def test_literal_property_with_invalid_object_iri_raises(self):
@@ -148,7 +148,7 @@ class TestPropertySpecDatatypes:
         # Setup: Literal property but allValuesFrom has IRI (invalid)
         prop_spec = PropertySpec(
             iri=IRI("https://example.org/badProp"),
-            value_kind="literal",
+            value_kind=PropertyValueKind.LITERAL,
             python_range_type=str,
             min_count=None,
             max_count=None,
@@ -169,7 +169,7 @@ class TestPropertySpecConstraints:
         # Setup
         prop_spec = PropertySpec(
             iri=IRI("https://example.org/someProp"),
-            value_kind="literal",
+            value_kind=PropertyValueKind.LITERAL,
             python_range_type=str,
             min_count=None,
             max_count=None,
@@ -185,7 +185,7 @@ class TestPropertySpecConstraints:
         # Setup
         prop_spec = PropertySpec(
             iri=IRI("https://example.org/allProp"),
-            value_kind="literal",
+            value_kind=PropertyValueKind.LITERAL,
             python_range_type=None,
             min_count=None,
             max_count=None,
@@ -204,7 +204,7 @@ class TestPropertySpecConstraints:
         # Setup
         prop_spec = PropertySpec(
             iri=IRI("https://example.org/bothProp"),
-            value_kind="literal",
+            value_kind=PropertyValueKind.LITERAL,
             python_range_type=str,
             min_count=None,
             max_count=None,
@@ -235,7 +235,9 @@ class TestPropertySpecification:
 
         # Execute & Assert
         with pytest.raises(ValueError, match="has no rdfs:range defined"):
-            PropertySpec.specify_literal_property(ogm=ogm_with_mock_db, prop=prop_iri)
+            PropertySpec._specify_literal_property(
+                ogm=ogm_with_mock_db, prop_iri=prop_iri
+            )
 
     def test_specify_literal_property_with_multiple_ranges_raises(
         self, ogm_with_mock_db, mock_db
@@ -250,7 +252,9 @@ class TestPropertySpecification:
 
         # Execute & Assert
         with pytest.raises(ValueError, match="has multiple rdfs:range defined"):
-            PropertySpec.specify_literal_property(ogm=ogm_with_mock_db, prop=prop_iri)
+            PropertySpec._specify_literal_property(
+                ogm=ogm_with_mock_db, prop_iri=prop_iri
+            )
 
     def test_specify_class_property_creates_nested_class_spec(
         self, ogm_with_mock_db, mock_db
@@ -262,12 +266,12 @@ class TestPropertySpecification:
         mock_db.triples_get.return_value = [(prop_iri, IRI("rdfs:range"), target_class)]
 
         # Execute
-        prop_spec = PropertySpec.specify_class_property(
-            ogm=ogm_with_mock_db, prop=prop_iri
+        prop_spec = PropertySpec._specify_class_property(
+            ogm=ogm_with_mock_db, prop_iri=prop_iri
         )
 
         # Assert
-        assert prop_spec.value_kind == "object"
+        assert prop_spec.value_kind is PropertyValueKind.OBJECT
         assert prop_spec.nested is not None
         assert prop_spec.nested.iri == target_class
 
@@ -281,7 +285,9 @@ class TestPropertySpecification:
 
         # Execute & Assert
         with pytest.raises(ValueError, match="has no rdfs:range defined"):
-            PropertySpec.specify_class_property(ogm=ogm_with_mock_db, prop=prop_iri)
+            PropertySpec._specify_class_property(
+                ogm=ogm_with_mock_db, prop_iri=prop_iri
+            )
 
 
 class TestPropertySpecSerialization:
@@ -292,7 +298,7 @@ class TestPropertySpecSerialization:
         # Setup
         prop_spec = PropertySpec(
             iri=IRI("https://example.org/testProp"),
-            value_kind="literal",
+            value_kind=PropertyValueKind.LITERAL,
             python_range_type=str,
             min_count=1,
             max_count=5,
@@ -316,7 +322,7 @@ class TestPropertySpecSerialization:
 
         prop_spec = PropertySpec(
             iri=IRI("https://example.org/objProp"),
-            value_kind="object",
+            value_kind=PropertyValueKind.OBJECT,
             python_range_type=None,
             min_count=None,
             max_count=None,
@@ -340,7 +346,7 @@ class TestComplexPropertyHandling:
 
         prop_spec = PropertySpec(
             iri=IRI("https://example.org/complexProp"),
-            value_kind="complex",
+            value_kind=PropertyValueKind.COMPLEX,
             python_range_type=None,
             min_count=None,
             max_count=None,
@@ -348,7 +354,7 @@ class TestComplexPropertyHandling:
         )
 
         # Assert
-        assert prop_spec.value_kind == "complex"
+        assert prop_spec.value_kind is PropertyValueKind.COMPLEX
         assert prop_spec.nested is not None
         assert prop_spec.nested.iri is None  # Anonymous
 
@@ -360,7 +366,7 @@ class TestComplexPropertyHandling:
 
         prop_spec = PropertySpec(
             iri=IRI("https://example.org/complexProp"),
-            value_kind="complex",
+            value_kind=PropertyValueKind.COMPLEX,
             python_range_type=None,
             min_count=None,
             max_count=None,

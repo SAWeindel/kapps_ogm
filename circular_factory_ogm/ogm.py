@@ -190,11 +190,11 @@ class OGM:
             return None
         else:
             if (
-                property_spec.value_kind == "data"
+                property_spec.value_kind is PropertyValueKind.LITERAL
             ):  # this is a datatype property without further chaining => cannot be expanded
-                data.append([str(obj) for subj, pred, obj in query_result])
+                data.extend([obj for subj, pred, obj in query_result])
 
-            elif property_spec.value_kind == "object":
+            elif property_spec.value_kind is PropertyValueKind.OBJECT:
                 if (
                     property_chain is not None
                 ):  # if there is a property chain given, and we are at the first element of it, we need to expand further
@@ -219,7 +219,7 @@ class OGM:
                     data.append(nested_instance)
 
             elif (
-                property_spec.value_kind == "complex"
+                property_spec.value_kind is PropertyValueKind.COMPLEX
             ):  # this is a property that has a range of complex type/bnode (ie due to union or intersection)
 
                 nested_dict = {}

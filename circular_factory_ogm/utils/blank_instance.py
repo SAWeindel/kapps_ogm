@@ -6,7 +6,7 @@ import pydantic as pd
 from graph_db_interface import IRI
 
 from circular_factory_ogm.mapping.class_spec import ClassSpec
-from circular_factory_ogm.mapping.property_spec import PropertySpec
+from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 
 if TYPE_CHECKING:
     from circular_factory_ogm.ogm import OGM
@@ -19,15 +19,15 @@ def _blank_value_for_property(ogm: "OGM", prop: PropertySpec) -> Any:
     - object: nested blank instance if hydrated, else None (IRI placeholder)
     - complex: requires hydrated nested ClassSpec; returns nested blank instance
     """
-    if prop.value_kind in ("data", "literal"):
+    if prop.value_kind is PropertyValueKind.LITERAL:
         return None
 
-    if prop.value_kind == "object":
+    if prop.value_kind is PropertyValueKind.OBJECT:
         if prop.nested and getattr(prop.nested, "_hydrated", False):
             return _blank_instance_from_class_spec(ogm, class_spec=prop.nested)
         return None  # unresolved object → IRI placeholder
 
-    if prop.value_kind == "complex":
+    if prop.value_kind is PropertyValueKind.COMPLEX:
         if not prop.nested or not getattr(prop.nested, "_hydrated", False):
             raise RuntimeError(
                 f"Complex property {prop.iri} requires hydrated nested ClassSpec"

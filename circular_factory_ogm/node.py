@@ -131,7 +131,31 @@ class Node:
             raise ValueError("Cannot create instance without loaded data")
 
         model_cls = self.class_spec.to_pydantic_model()
-        return model_cls.model_validate(self.data)
+
+        data = Node._format_data_for_validation(self.data)
+        model = model_cls.model_validate(data)
+        return model
+
+    @staticmethod
+    def _format_data_for_validation(data: Any) -> Any:
+        """
+        Recursively resolve property data to a model.
+        Converts Nodes to their data, property IRIs to their lined representation.
+        """
+        match data:
+            case dict():
+                return {
+                    (
+                        k.lined if isinstance(k, IRI) else k
+                    ): Node._format_data_for_validation(v)
+                    for k, v in data.items()
+                }
+            case list():
+                return [Node._format_data_for_validation(item) for item in data]
+            case Node():
+                return Node._format_data_for_validation(data.data)
+            case _:
+                return data
 
     def materialize(self, *, reload: bool = False) -> BaseModel:
         """

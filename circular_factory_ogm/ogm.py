@@ -225,17 +225,20 @@ class OGM:
                 nested_dict = {}
                 query = f"""
                     SELECT ?property ?value
+                    FROM <http://www.ontotext.com/explicit>
                     WHERE {{
                         <{instance_iri}> <{property_spec.iri}> ?intermediate .
                         ?intermediate ?property ?value .
                     }}
                 """
                 nested_query_result = (
-                    self.db.query(query).get("results", {}).get("bindings", [])
+                    self.db.query(query, convert_bindings=True)
+                    .get("results", {})
+                    .get("bindings", [])
                 )
                 for binding in nested_query_result:
-                    prop_iri = IRI(binding["property"]["value"])
-                    value = binding["value"]["value"]
+                    prop_iri = binding["property"]
+                    value = binding["value"]
                     if prop_iri not in nested_dict:
                         nested_dict[prop_iri] = []
                     nested_dict[prop_iri].append(value)
@@ -279,12 +282,12 @@ class OGM:
         )
 
         data = {}
-        data["id"] = str(instance_iri)  # every node must have an id at minimum
+        data["id"] = instance_iri  # every node must have an id at minimum
 
         if not as_reference:
             # Full fetch according to class spec (already filtered by property chains)
             for prop, prop_spec in class_spec.properties.items():
-                if property_chains is not None:
+                if property_chains is not None and len(property_chains) > 0:
                     for chain in property_chains:
                         if len(chain) > 0 and chain[0] == prop_spec.iri:
                             # pass the rest of the chain for nested fetching

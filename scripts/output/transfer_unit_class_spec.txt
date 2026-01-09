@@ -1,24 +1,22 @@
 ClassSpec(
   iri=https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit
-  label=Transfer Unit
   types=[IRI('http://www.w3.org/2000/01/rdf-schema#Class'), IRI('http://www.w3.org/2002/07/owl#Class')]
   properties={
     https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt:
       PropertySpec(
         iri=https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt
-        value_kind=object
+        value_kind=PropertyValueKind.OBJECT
         python_range_type=None
         required=False
         min_count=None
         max_count=None
         nested=ClassSpec(
           iri=https://www.sfb1574.kit.edu/ontologies/TransferUnit#ConveyorBelt
-          label=Conveyor Belt
           properties={
             https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition:
             PropertySpec(
               iri=https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition
-              value_kind=complex
+              value_kind=PropertyValueKind.COMPLEX
               python_range_type=None
               required=False
               min_count=None
@@ -26,20 +24,20 @@ ClassSpec(
               nested=ClassSpec(
                 iri=None
                 properties={
-                  https://www.sfb1574.kit.edu/ontologies/inf#hasValue:
+                  https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue:
                   PropertySpec(
-                    iri=https://www.sfb1574.kit.edu/ontologies/inf#hasValue
-                    value_kind=literal
+                    iri=https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue
+                    value_kind=PropertyValueKind.LITERAL
                     python_range_type=None
                     required=True
                     min_count=1
                     max_count=None
                     nested=None
                   )
-                  https://www.sfb1574.kit.edu/ontologies/inf#hasUnit:
+                  https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit:
                   PropertySpec(
-                    iri=https://www.sfb1574.kit.edu/ontologies/inf#hasUnit
-                    value_kind=literal
+                    iri=https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit
+                    value_kind=PropertyValueKind.LITERAL
                     python_range_type=None
                     required=True
                     min_count=1
@@ -47,13 +45,13 @@ ClassSpec(
                     nested=None
                   )
                 }
-                metadata={'intersectionOf': ['https://www.sfb1574.kit.edu/ontologies/inf#hasValue', 'https://www.sfb1574.kit.edu/ontologies/inf#hasUnit']}
+                metadata={'intersectionOf': ['https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue', 'https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit']}
               )
             )
             https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed:
             PropertySpec(
               iri=https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed
-              value_kind=complex
+              value_kind=PropertyValueKind.COMPLEX
               python_range_type=None
               required=False
               min_count=None
@@ -61,20 +59,20 @@ ClassSpec(
               nested=ClassSpec(
                 iri=None
                 properties={
-                  https://www.sfb1574.kit.edu/ontologies/inf#hasUnit:
+                  https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue:
                   PropertySpec(
-                    iri=https://www.sfb1574.kit.edu/ontologies/inf#hasUnit
-                    value_kind=literal
+                    iri=https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue
+                    value_kind=PropertyValueKind.LITERAL
                     python_range_type=None
                     required=True
                     min_count=1
                     max_count=None
                     nested=None
                   )
-                  https://www.sfb1574.kit.edu/ontologies/inf#hasValue:
+                  https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit:
                   PropertySpec(
-                    iri=https://www.sfb1574.kit.edu/ontologies/inf#hasValue
-                    value_kind=literal
+                    iri=https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit
+                    value_kind=PropertyValueKind.LITERAL
                     python_range_type=None
                     required=True
                     min_count=1
@@ -82,8 +80,18 @@ ClassSpec(
                     nested=None
                   )
                 }
-                metadata={'intersectionOf': ['https://www.sfb1574.kit.edu/ontologies/inf#hasUnit', 'https://www.sfb1574.kit.edu/ontologies/inf#hasValue']}
+                metadata={'intersectionOf': ['https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue', 'https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit']}
               )
+            )
+            https://www.sfb1574.kit.edu/ontologies/TransferUnit#isWorking:
+            PropertySpec(
+              iri=https://www.sfb1574.kit.edu/ontologies/TransferUnit#isWorking
+              value_kind=PropertyValueKind.LITERAL
+              python_range_type=<class 'bool'>
+              required=False
+              min_count=None
+              max_count=None
+              nested=None
             )
           }
         )
@@ -91,19 +99,18 @@ ClassSpec(
     https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier:
       PropertySpec(
         iri=https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier
-        value_kind=object
+        value_kind=PropertyValueKind.OBJECT
         python_range_type=None
         required=False
         min_count=None
         max_count=None
         nested=ClassSpec(
           iri=https://www.sfb1574.kit.edu/ontologies/TransferUnit#LightBarrier
-          label=Light Barrier
           properties={
             https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied:
             PropertySpec(
               iri=https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied
-              value_kind=complex
+              value_kind=PropertyValueKind.COMPLEX
               python_range_type=None
               required=False
               min_count=None
@@ -111,20 +118,10 @@ ClassSpec(
               nested=ClassSpec(
                 iri=None
                 properties={
-                  https://www.sfb1574.kit.edu/ontologies/inf#hasValue:
+                  https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue:
                   PropertySpec(
-                    iri=https://www.sfb1574.kit.edu/ontologies/inf#hasValue
-                    value_kind=literal
-                    python_range_type=None
-                    required=True
-                    min_count=1
-                    max_count=None
-                    nested=None
-                  )
-                  https://www.sfb1574.kit.edu/ontologies/inf#hasUnit:
-                  PropertySpec(
-                    iri=https://www.sfb1574.kit.edu/ontologies/inf#hasUnit
-                    value_kind=literal
+                    iri=https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue
+                    value_kind=PropertyValueKind.LITERAL
                     python_range_type=None
                     required=True
                     min_count=1
@@ -132,8 +129,18 @@ ClassSpec(
                     nested=None
                   )
                 }
-                metadata={'intersectionOf': ['https://www.sfb1574.kit.edu/ontologies/inf#hasValue', 'https://www.sfb1574.kit.edu/ontologies/inf#hasUnit']}
+                metadata={'intersectionOf': ['https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue']}
               )
+            )
+            https://www.sfb1574.kit.edu/ontologies/TransferUnit#isWorking:
+            PropertySpec(
+              iri=https://www.sfb1574.kit.edu/ontologies/TransferUnit#isWorking
+              value_kind=PropertyValueKind.LITERAL
+              python_range_type=<class 'bool'>
+              required=False
+              min_count=None
+              max_count=None
+              nested=None
             )
           }
         )

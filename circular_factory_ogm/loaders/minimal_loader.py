@@ -1,7 +1,7 @@
 from typing import Dict, Any
 
 from graph_db_interface import GraphDB, IRI
-from graph_db_interface.utils.typemap import XSDToPythonTypes
+from graph_db_interface.utils.xsd_typemap import XSDToPythonTypes
 
 from circular_factory_ogm.node import Node
 

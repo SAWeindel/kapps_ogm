@@ -5,7 +5,8 @@ from collections import defaultdict
 from pydantic import BaseModel, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
 from rdflib import BNode, Literal
-from graph_db_interface import IRI, Triple, to_literal
+from graph_db_interface import IRI, to_literal
+from graph_db_interface.utils.types import Triple
 
 
 if TYPE_CHECKING:

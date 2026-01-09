@@ -2,72 +2,64 @@
   "$defs": {
     "circular_factory_ogm__mapping__class_spec__AnonymousClass__1": {
       "properties": {
-        "https_www_sfb1574_kit_edu_ontologies_inf_hasValue": {
-          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+        "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue": {
+          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue",
           "items": {},
           "minItems": 1,
-          "title": "https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+          "title": "https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue",
           "type": "array"
         },
-        "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": {
-          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+        "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasUnit": {
+          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit",
           "items": {},
           "minItems": 1,
-          "title": "https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+          "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit",
           "type": "array"
         }
       },
       "required": [
-        "https_www_sfb1574_kit_edu_ontologies_inf_hasValue",
-        "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit"
+        "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue",
+        "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasUnit"
       ],
       "title": "AnonymousClass",
       "type": "object"
     },
     "circular_factory_ogm__mapping__class_spec__AnonymousClass__2": {
       "properties": {
-        "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": {
-          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+        "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue": {
+          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue",
           "items": {},
           "minItems": 1,
-          "title": "https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+          "title": "https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue",
           "type": "array"
         },
-        "https_www_sfb1574_kit_edu_ontologies_inf_hasValue": {
-          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+        "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasUnit": {
+          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit",
           "items": {},
           "minItems": 1,
-          "title": "https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+          "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit",
           "type": "array"
         }
       },
       "required": [
-        "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit",
-        "https_www_sfb1574_kit_edu_ontologies_inf_hasValue"
+        "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue",
+        "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasUnit"
       ],
       "title": "AnonymousClass",
       "type": "object"
     },
     "circular_factory_ogm__mapping__class_spec__AnonymousClass__3": {
       "properties": {
-        "https_www_sfb1574_kit_edu_ontologies_inf_hasValue": {
-          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
+        "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue": {
+          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue",
           "items": {},
           "minItems": 1,
-          "title": "https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
-          "type": "array"
-        },
-        "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": {
-          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
-          "items": {},
-          "minItems": 1,
-          "title": "https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
+          "title": "https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue",
           "type": "array"
         }
       },
       "required": [
-        "https_www_sfb1574_kit_edu_ontologies_inf_hasValue",
-        "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit"
+        "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue"
       ],
       "title": "AnonymousClass",
       "type": "object"
@@ -109,6 +101,22 @@
           "default": null,
           "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed",
           "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed"
+        },
+        "https_www_sfb1574_kit_edu_ontologies_TransferUnit_isWorking": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "boolean"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#isWorking",
+          "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isWorking"
         }
       },
       "required": [
@@ -138,6 +146,22 @@
           "default": null,
           "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied",
           "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied"
+        },
+        "https_www_sfb1574_kit_edu_ontologies_TransferUnit_isWorking": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "boolean"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#isWorking",
+          "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isWorking"
         }
       },
       "required": [

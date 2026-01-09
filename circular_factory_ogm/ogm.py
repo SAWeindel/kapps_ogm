@@ -1,20 +1,17 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Optional, get_args
 import logging
 import pydantic as pd
 from pydantic import ValidationError
+from itertools import batched
 
 from graph_db_interface import GraphDB, IRI
 
 from circular_factory_ogm.node import Node
 from circular_factory_ogm.mapping.class_spec import ClassSpec
-from circular_factory_ogm.mapping.property_spec import PropertySpec
-from circular_factory_ogm.utils.blank_instance import (
-    _create_blank_instance,
-    _blank_instance_from_class_spec,
-    _blank_value_for_property,
-)
+from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
+from circular_factory_ogm.utils.blank_instance import _create_blank_instance
 from circular_factory_ogm.utils.loader_strategy import LoaderStrategy
 
 
@@ -115,22 +112,38 @@ class OGM:
             property_chains=property_chains,
         )
 
+        if instance_iri:
+            if "id" in data and data["id"] != instance_iri:
+                self.logger.warning(
+                    f"Provided inconsistent ids for instance: 'instance_iri' is '{instance_iri}', 'data['id']' is '{data["id"]}'. Using 'instance_iri'."
+                )
+            data["id"] = instance_iri
+
         model_cls = class_spec.to_pydantic_model()
 
         try:
             instance = model_cls.model_validate(data)
         except ValidationError as e:
-            self.logger.error("Data validation error for class %s: %s", class_iri, e)
-            raise
-
-        node_id = (
-            instance_iri or IRI(f"http://example.org/instances/{node_naming_schema()}")
-            if node_naming_schema
-            else IRI(f"http://example.org/instances/{class_iri.lined}-generated")
-        )
+            # if only ids are missing, we can generate them
+            if all(
+                error["type"] == "missing" and error["loc"][-1] == "id"
+                for error in e.errors()
+            ):
+                self._assign_ids_to_data_from_validation_error(
+                    model_cls=model_cls,
+                    validation_error=e,
+                    data=data,
+                    naming_schema=node_naming_schema or self.db.new_iri,
+                )
+                instance = model_cls.model_validate(data)
+            else:
+                self.logger.error(
+                    "Data validation error for class %s: %s", class_iri, e.errors()
+                )
+                raise e
 
         node = Node(
-            id=node_id,
+            id=data["id"],
             class_spec=class_spec,
             data=data,
             instance=instance,
@@ -138,7 +151,42 @@ class OGM:
         )
 
         if persist:
-            pass  # TODO: implement persistence logic here
+            triples = node.to_triples()
+            self.db.triples_add(triples)
+
+        return node
+
+    def _assign_ids_to_data_from_validation_error(
+        self,
+        model_cls: pd.BaseModel,
+        validation_error: ValidationError,
+        data: dict,
+        naming_schema: Callable[[], str],
+    ):
+        error_list = validation_error.errors()
+        for error in error_list:
+
+            # We need to dig through the error chain to get to the model missing its id
+            # error["loc"] is a tuple of the form (pred0, idx0, pred1, idx1, ..., "id")
+            # we need to follow the pairs of pred, idx to extract the
+            # model name and location in the data dict of the instance missing its id
+            loc = error["loc"][:-1]  # remove trailing "id"
+            model = model_cls  # tracks the head pydantic model
+            data_dict = data  # tracks the nested data dict
+            for pred, idx in batched(loc, n=2):
+                # update the pydantic model to the next link in the chain
+                model = model.model_fields[pred].annotation
+                # dig through the type hints until reaching the actual pydantic model
+                while not issubclass(model, pd.BaseModel):
+                    model = get_args(model)[0]
+                # update the data dict to the next link in the chain
+                data_dict = data_dict[pred][idx]
+            model_iri = model._iri_model_name
+            instance_iri = naming_schema(base=model_iri + "_")
+            data_dict["id"] = instance_iri
+            self.logger.debug(
+                f"Assigning '{model_iri.fragment}' instance at {loc} id '{instance_iri}'"
+            )
 
     def create_blank_instance(
         self,
@@ -195,19 +243,18 @@ class OGM:
                 data.extend([obj for subj, pred, obj in query_result])
 
             elif property_spec.value_kind is PropertyValueKind.OBJECT:
-                if (
-                    property_chain is not None
-                ):  # if there is a property chain given, and we are at the first element of it, we need to expand further
+                # if there is a property chain given, and we are at the first element of it, we need to expand further
+                if property_chain is not None:
                     if property_chain[0] == property_spec.iri:
-                        property_chain.pop(
-                            0
-                        )  # we remove the first element and pass the rest down, call fetch recursively
+                        # we remove the first element and pass the rest down, call fetch recursively
+                        remaining_chain = property_chain[1:]
                         for subj, pred, obj in query_result:
                             nested_instance = self.fetch(
                                 instance_iri=obj,
+                                class_spec=property_spec.nested,
                                 property_chains=(
-                                    [property_chain]
-                                    if len(property_chain) > 0
+                                    [remaining_chain]
+                                    if len(remaining_chain) > 0
                                     else None
                                 ),
                                 as_reference=False,
@@ -215,7 +262,11 @@ class OGM:
                             )
                             data.append(nested_instance)
                 else:  # no property chain given, we treat the object just as reference
-                    nested_instance = self.fetch(instance_iri=obj, as_reference=True)
+                    nested_instance = self.fetch(
+                        instance_iri=obj,
+                        class_spec=property_spec.nested,
+                        as_reference=True,
+                    )
                     data.append(nested_instance)
 
             elif (
@@ -255,6 +306,7 @@ class OGM:
         self,
         *,
         instance_iri: IRI,
+        class_spec: Optional[ClassSpec] = None,
         property_chains: Optional[list[list[IRI]]] = None,
         as_reference: bool = False,
         materialize: bool = False,
@@ -270,16 +322,15 @@ class OGM:
         Returns:
             Node representing the fetched instance
         """
-        property_chains = (
-            property_chains
-            if property_chains is not None
-            else self._loader.expand(instance_iri) if self._loader else None
-        )
-        class_iri = self.db.owl_get_classes_of_individual(instance_iri)[0]
-        class_spec = self.get_class_spec(
-            class_iri=class_iri,
-            property_chains=property_chains,
-        )
+        if property_chains is None and self._loader is not None:
+            property_chains = self._loader.expand(instance_iri)
+
+        if class_spec is None:
+            class_iri = self.db.owl_get_classes_of_individual(instance_iri)[0]
+            class_spec = self.get_class_spec(
+                class_iri=class_iri,
+                property_chains=property_chains,
+            )
 
         data = {}
         data["id"] = instance_iri  # every node must have an id at minimum

@@ -1,39 +1,33 @@
 from __future__ import annotations
 
 from typing import Optional, Type, Any, Dict, List, TYPE_CHECKING
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 import logging
 import pydantic as pd
 
 from graph_db_interface import IRI
 from circular_factory_ogm.utils.pretty_print import class_spec_to_string
-from circular_factory_ogm.utils.constants import (
-    PROPERTY_TYPES,
-    PROPERTY_CHARACTERISTICS,
-)
-
 from circular_factory_ogm.mapping.property_spec import PropertySpec
 
 if TYPE_CHECKING:
     from circular_factory_ogm.ogm import OGM
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("cf_cspec")
 
 
 @dataclass
 class ClassSpec:
     iri: Optional[IRI]
     label: Optional[str] = None
+    comment: Optional[str] = None
     properties: Dict[IRI, PropertySpec] = field(default_factory=dict)
     types: List[IRI] = field(default_factory=list)
     superclasses: List[IRI] = field(default_factory=list)
     pydantic_base_model: Optional[Type[pd.BaseModel]] = pd.BaseModel
     metadata: Dict[str, Any] = field(default_factory=dict)
     _hydrated: bool = field(default=False, init=False)
-    
 
     def to_string(self) -> str:
-
         return class_spec_to_string(self)
 
     def hydrate(self, ogm: "OGM") -> ClassSpec:
@@ -46,12 +40,8 @@ class ClassSpec:
             raise ValueError("Cannot hydrate ClassSpec without an IRI.")
 
         hydrated_spec = ClassSpec.specify(self.iri, ogm)
-        self.label = hydrated_spec.label
-        self.properties = hydrated_spec.properties
-        self.types = hydrated_spec.types
-        self.superclasses = hydrated_spec.superclasses
-        self.metadata = hydrated_spec.metadata
-        self._hydrated = True
+        for key, value in asdict(hydrated_spec).items():
+            setattr(self, key, value)
         return self
 
     def to_pydantic_model(self) -> Type[pd.BaseModel]:
@@ -63,10 +53,13 @@ class ClassSpec:
 
         # Only add id field for named classes (not blank nodes)
         if self.iri:
+            logger.debug(
+                f"Converting ClassSpec '{self.iri.fragment}' to pydantic model"
+            )
             fields["id"] = (IRI, pd.Field(..., description="IRI of the instance"))
         else:
-            logger.info(
-                "ClassSpec has no IRI; this is a blank node that will not be a standalone node."
+            logger.debug(
+                "Converting ClassSpec without IRI to pydantic model; this is a blank node that will not be a standalone node."
             )
 
         for prop_iri, prop_spec in self.properties.items():
@@ -110,9 +103,12 @@ class ClassSpec:
                 A ClassSpec instance representing the class specification"""
         db = ogm.db
 
-        # first we get all types of the class
+        ### Collect special properties
+        # Get all types of the class
         triples = db.triples_get(sub=class_iri, pred="rdf:type", include_implicit=True)
         class_types = [triple[2] for triple in triples]
+        if not class_types:
+            raise ValueError(f"Class {class_iri} has no rdf:type defined.")
         if IRI("owl:Class") not in class_types and IRI("rdfs:Class") not in class_types:
             raise ValueError(f"IRI {class_iri} is not an OWL/RDFS Class.")
 
@@ -121,12 +117,29 @@ class ClassSpec:
             types=class_types,
         )
 
+        # Get the (first) label of the class
         label_triples = db.triples_get(
             sub=class_iri, pred="rdfs:label", include_implicit=True
         )
         if label_triples:
+            if len(label_triples) > 1:
+                logger.warning(
+                    f"Class {class_iri} has multiple rdfs:label values; using the first one."
+                )
             class_spec.label = str(label_triples[0][2])
 
+        # Get the (first) comment of the class
+        comment_triples = db.triples_get(
+            sub=class_iri, pred="rdfs:comment", include_implicit=True
+        )
+        if comment_triples:
+            if len(comment_triples) > 1:
+                logger.warning(
+                    f"Class {class_iri} has multiple rdfs:comment values; using the first one."
+                )
+            class_spec.comment = str(comment_triples[0][2])
+
+        # Get the superclasses of the class
         superclasses = [
             triple[2]
             for triple in db.triples_get(
@@ -142,63 +155,20 @@ class ClassSpec:
         if superclasses:
             class_spec.superclasses = superclasses
 
-        # 1) inherit properties from superclasses (keep first occurrence)
+        ### Build property specs of the class
         class_spec.properties = {}
+
+        # inherit properties from superclasses
         for sc in superclasses:
-            inherited = ClassSpec.classify_outgoing_properties(sc, ogm)
-            for k, v in inherited.items():
-                if k not in class_spec.properties:
-                    class_spec.properties[k] = v
+            sc_spec = ClassSpec.specify(class_iri=sc, ogm=ogm)
+            duplicated_props = class_spec.properties.keys() & sc_spec.properties.keys()
+            if duplicated_props:
+                logger.warning(
+                    f"Properties {duplicated_props} of {class_iri} are defined in multiple superclasses."
+                )
+            class_spec.properties.update(sc_spec.properties)
 
-        # 2) own properties override inherited ones
-        own_props = ClassSpec.classify_outgoing_properties(class_iri, ogm)
-        class_spec.properties.update(own_props)
-
-        if property_chains:
-            for property_chain in property_chains:
-                current_spec = class_spec
-                for i, prop_iri in enumerate(property_chain):
-                    if prop_iri not in current_spec.properties:
-                        raise ValueError(
-                            f"Property {prop_iri} not found in class {current_spec.iri} "
-                            f"while processing property chain."
-                        )
-
-                    prop_spec = current_spec.properties[prop_iri]
-
-                    if prop_spec.nested is None:
-                        raise ValueError(
-                            f"Property {prop_iri} has no nested ClassSpec "
-                            f"(cannot continue property chain)."
-                        )
-
-                    # Rebuild nested ClassSpec with remaining chain tail
-                    remaining_chain = property_chain[i + 1 :]
-                    nested_spec = cls.specify(
-                        class_iri=prop_spec.nested.iri,
-                        ogm=ogm,
-                        property_chains=[remaining_chain] if remaining_chain else None,
-                    )
-                    # Mark as hydrated since it was fully specified
-                    nested_spec._hydrated = True
-
-                    # Replace nested spec for this chain only
-                    prop_spec.nested = nested_spec
-                    current_spec = nested_spec
-
-        # Mark as hydrated if it was fully specified
-        class_spec._hydrated = True
-        
-
-        return class_spec
-
-    @staticmethod
-    def classify_outgoing_properties(
-        class_iri: IRI,
-        ogm: "OGM",
-    ) -> dict[IRI, PropertySpec]:
-        db = ogm.db
-
+        # own properties override inherited ones
         query = f"""
             PREFIX onto: <http://www.ontotext.com/>
             PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -218,42 +188,48 @@ class ClassSpec:
                 }}
             }}
         """
+        query_result = db.query(query, convert_bindings=True)
         properties = (
-            b["property"]
-            for b in db.query(query, convert_bindings=True)
-            .get("results", {})
-            .get("bindings", [])
+            b["property"] for b in query_result.get("results", {}).get("bindings", [])
         )
 
-        property_spec_dict: dict[IRI, PropertySpec] = {}
         for prop in properties:
-            ### first we categorize the property regarding its type and characteristics
-            # query for property type
-            query_result = db.triples_get(
-                sub=prop, pred="rdf:type", include_implicit=False
-            )
-            property_types = [triple[2] for triple in query_result]
+            class_spec.properties[prop] = PropertySpec.specify(prop_iri=prop, ogm=ogm)
 
-            if not property_types:
-                raise ValueError(f"Property {prop} has no rdf:type defined.")
+        ### Follow property chains to hydrate connected ClassSpecs
+        if property_chains:
+            for property_chain in property_chains:
+                if len(property_chain) == 0:
+                    continue  # skip empty chains
 
-            # Categorize property types and check if functional property
-            base_types = []
-            characteristics = []
+                next_property = property_chain[0]
+                if next_property not in class_spec.properties:
+                    raise ValueError(
+                        f"Property {next_property} not found in class {class_spec.iri} while processing property chain."
+                    )
 
-            for ptype in property_types:
-                if ptype in PROPERTY_TYPES:
-                    base_types.append(PROPERTY_TYPES[ptype])
-                elif ptype in PROPERTY_CHARACTERISTICS:
-                    characteristics.append(PROPERTY_CHARACTERISTICS[ptype])
+                prop_spec = class_spec.properties[next_property]
 
-            property_spec = PropertySpec.specify_property(ogm, prop)
+                if prop_spec.nested is None:
+                    raise ValueError(
+                        f"Property {next_property} has no nested ClassSpec (cannot continue property chain)."
+                    )
 
-            # Apply characteristics to the property_spec if it exists
-            if property_spec and "functional" in characteristics:
-                property_spec.max_count = 1
+                # Rebuild nested ClassSpec with remaining chain tail
+                remaining_chain = property_chain[1:]
+                logger.debug(
+                    f"'{class_spec.iri.fragment}' specifies '{prop_spec.nested.iri.fragment}' following chain {[i.fragment for i in property_chain]}"
+                )
+                nested_spec = cls.specify(
+                    class_iri=prop_spec.nested.iri,
+                    ogm=ogm,
+                    property_chains=[remaining_chain] if remaining_chain else None,
+                )
 
-            if property_spec:
-                property_spec_dict[prop] = property_spec
+                # Replace nested spec for this chain only
+                prop_spec.nested = nested_spec
 
-        return property_spec_dict
+        # Mark as hydrated if it was fully specified
+        class_spec._hydrated = True
+
+        return class_spec

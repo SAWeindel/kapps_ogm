@@ -7,11 +7,16 @@ from graph_db_interface import IRI, XSDToPythonTypes
 import logging
 from pydantic import BeforeValidator, Field, conlist
 
+from circular_factory_ogm.utils.constants import (
+    PROPERTY_TYPES,
+    PROPERTY_CHARACTERISTICS,
+)
+
 if TYPE_CHECKING:
     from circular_factory_ogm.mapping.class_spec import ClassSpec
     from circular_factory_ogm.ogm import OGM
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("cf_pspec")
 
 
 class PropertyValueKind(Enum):
@@ -44,6 +49,9 @@ class PropertySpec:
 
     def to_pydantic_field(self) -> tuple[Any, Any]:
         """Convert this PropertySpec into a Pydantic field with validators."""
+        logger.debug(
+            f"Converting PropertySpec ({self.value_kind.value}) '{self.iri.fragment}' to pydantic field"
+        )
 
         if self.value_kind is PropertyValueKind.LITERAL:
             # If all_from is set, use it as type restriction
@@ -123,61 +131,85 @@ class PropertySpec:
         return field_type, field
 
     @classmethod
-    def specify_property(
+    def specify(
         cls,
-        ogm: "OGM",
         prop_iri: IRI,
+        ogm: "OGM",
     ) -> PropertySpec:
+        # Categorize the property regarding its type and characteristics
+        query_result = ogm.db.triples_get(
+            sub=prop_iri, pred="rdf:type", include_implicit=False
+        )
+        property_types = [triple[2] for triple in query_result]
+
+        if not property_types:
+            raise ValueError(f"Property {prop_iri} has no rdf:type defined.")
+
+        base_types = []
+        characteristics = []
+
+        for ptype in property_types:
+            if ptype in PROPERTY_TYPES:
+                base_types.append(PROPERTY_TYPES[ptype])
+            elif ptype in PROPERTY_CHARACTERISTICS:
+                characteristics.append(PROPERTY_CHARACTERISTICS[ptype])
+
+        # Determine the property specification based on its range
         query_result = ogm.db.triples_get(
             sub=prop_iri, pred="rdfs:range", include_implicit=True
         )
-        prop_ranges = [triple[2] for triple in query_result]
 
-        if len(prop_ranges) == 0:
+        if len(query_result) == 0:
             raise ValueError(f"Property {prop_iri} has no rdfs:range defined.")
-        elif len(prop_ranges) > 1:
+        elif len(query_result) > 1:
             raise ValueError(
-                f"Property {prop_iri} has multiple rdfs:range defined: {prop_ranges}"
+                f"Property {prop_iri} has multiple rdfs:range defined: {[triple[2] for triple in query_result]}"
             )
 
-        prop_range = prop_ranges[0]
+        prop_range = query_result[0][2]
         if isinstance(prop_range, type):
-            return cls._specify_literal_property(prop_iri, prop_range)
+            property_spec = cls._specify_literal_property(prop_iri, prop_range)
         elif isinstance(prop_range, IRI):
-            return cls._specify_class_property(prop_iri, prop_range)
-
-        # Is blank node: Check if valid structure for complex datatype
-        query_is_complex_type = f"""
-            ASK {{
-                BIND({prop_iri.n3()} AS ?property)
-                ?property <http://www.w3.org/2000/01/rdf-schema#range> ?range .
-                {{
-                    ?range a <http://www.w3.org/2002/07/owl#Restriction>
-                }}
-                UNION
-                {{
-                    ?range <http://www.w3.org/2002/07/owl#intersectionOf> ?x
-                }}
-                UNION
-                {{
-                    ?range <http://www.w3.org/2002/07/owl#unionOf> ?y
-                }}
-                UNION
-                {{
-                    ?range <http://www.w3.org/2002/07/owl#complementOf> ?z
-                }}
-                UNION
-                {{
-                    ?range <http://www.w3.org/2002/07/owl#oneOf> ?w
-                }}
-            }}
-        """
-        if ogm.db.query(query_is_complex_type).get("boolean", False):
-            return cls._specify_complex_property(ogm, prop_iri)
+            property_spec = cls._specify_class_property(prop_iri, prop_range)
         else:
-            raise ValueError(
-                f"Unknown property_type: {prop_range} for property {prop_iri}"
-            )
+            # Is blank node: Check if valid structure for complex datatype
+            query_is_complex_type = f"""
+                ASK {{
+                    BIND({prop_iri.n3()} AS ?property)
+                    ?property <http://www.w3.org/2000/01/rdf-schema#range> ?range .
+                    {{
+                        ?range a <http://www.w3.org/2002/07/owl#Restriction>
+                    }}
+                    UNION
+                    {{
+                        ?range <http://www.w3.org/2002/07/owl#intersectionOf> ?x
+                    }}
+                    UNION
+                    {{
+                        ?range <http://www.w3.org/2002/07/owl#unionOf> ?y
+                    }}
+                    UNION
+                    {{
+                        ?range <http://www.w3.org/2002/07/owl#complementOf> ?z
+                    }}
+                    UNION
+                    {{
+                        ?range <http://www.w3.org/2002/07/owl#oneOf> ?w
+                    }}
+                }}
+            """
+            if ogm.db.query(query_is_complex_type).get("boolean", False):
+                property_spec = cls._specify_complex_property(ogm, prop_iri)
+            else:
+                raise ValueError(
+                    f"Unknown property_type: {prop_range} for property {prop_iri}"
+                )
+
+        # Apply characteristics to the property_spec
+        if "functional" in characteristics:
+            property_spec.max_count = 1
+
+        return property_spec
 
     @classmethod
     def _specify_literal_property(

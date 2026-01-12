@@ -1,6 +1,7 @@
 {
   "$defs": {
     "circular_factory_ogm__mapping__class_spec__AnonymousClass__1": {
+      "additionalProperties": false,
       "properties": {
         "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue": {
           "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue",
@@ -25,6 +26,7 @@
       "type": "object"
     },
     "circular_factory_ogm__mapping__class_spec__AnonymousClass__2": {
+      "additionalProperties": false,
       "properties": {
         "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue": {
           "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue",
@@ -49,6 +51,7 @@
       "type": "object"
     },
     "circular_factory_ogm__mapping__class_spec__AnonymousClass__3": {
+      "additionalProperties": false,
       "properties": {
         "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue": {
           "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue",
@@ -65,6 +68,7 @@
       "type": "object"
     },
     "https_www_sfb1574_kit_edu_ontologies_TransferUnit_ConveyorBelt": {
+      "additionalProperties": false,
       "properties": {
         "id": {
           "description": "IRI of the instance",
@@ -82,7 +86,7 @@
               "type": "null"
             }
           ],
-          "default": null,
+          "default": [],
           "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition",
           "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition"
         },
@@ -98,7 +102,7 @@
               "type": "null"
             }
           ],
-          "default": null,
+          "default": [],
           "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed",
           "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed"
         },
@@ -114,7 +118,7 @@
               "type": "null"
             }
           ],
-          "default": null,
+          "default": [],
           "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#isWorking",
           "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isWorking"
         }
@@ -126,6 +130,7 @@
       "type": "object"
     },
     "https_www_sfb1574_kit_edu_ontologies_TransferUnit_LightBarrier": {
+      "additionalProperties": false,
       "properties": {
         "id": {
           "description": "IRI of the instance",
@@ -143,7 +148,7 @@
               "type": "null"
             }
           ],
-          "default": null,
+          "default": [],
           "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied",
           "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied"
         },
@@ -159,7 +164,7 @@
               "type": "null"
             }
           ],
-          "default": null,
+          "default": [],
           "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#isWorking",
           "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isWorking"
         }
@@ -171,6 +176,7 @@
       "type": "object"
     }
   },
+  "additionalProperties": false,
   "properties": {
     "id": {
       "description": "IRI of the instance",
@@ -188,7 +194,7 @@
           "type": "null"
         }
       ],
-      "default": null,
+      "default": [],
       "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt",
       "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"
     },
@@ -204,7 +210,7 @@
           "type": "null"
         }
       ],
-      "default": null,
+      "default": [],
       "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier",
       "title": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"
     }

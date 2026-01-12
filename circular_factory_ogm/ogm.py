@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from itertools import batched
 
 from graph_db_interface import GraphDB, IRI
+from graph_db_interface.utils.types import GraphNameLike, IRILike
 
 from circular_factory_ogm.node import Node
 from circular_factory_ogm.mapping.class_spec import ClassSpec
@@ -26,6 +27,7 @@ class OGM:
         db: GraphDB,
         loader: Optional[LoaderStrategy] = None,
         logger: Optional[logging.Logger] = None,
+        naming_schema: Optional[Callable[[], str]] = None,
     ):
         """
         Args:
@@ -35,7 +37,9 @@ class OGM:
         """
         self.db = db
         self._loader = loader
+        self._naming_schema = naming_schema
         self.logger = logger or logging.getLogger("cf_ogm")
+        self.logger.setLevel(logging.DEBUG)
 
     # ------------------------------------------------------------------
     # Schema orchestration
@@ -81,8 +85,8 @@ class OGM:
         data: dict,
         property_chains: Optional[list[list[IRI]]] = None,
         instance_iri: Optional[IRI] = None,
-        node_naming_schema: Optional[Callable[[], str]] = None,
         persist: bool = True,
+        named_graph: Optional[GraphNameLike] = None,
     ) -> Node:
         """
         Create a new Node instance with given data.
@@ -91,7 +95,6 @@ class OGM:
             data: Data dictionary for the instance (must conform to class_spec)
             property_chains: Optional property chains for selective hydration
             instance_iri: Optional IRI for the new instance (if not provided, a new one will be generated)
-            node_naming_schema: Optional callable to generate node names/IRIs
             persist: Whether to persist the new instance to the graph database
         Returns:
             Node representing the newly created instance
@@ -112,47 +115,19 @@ class OGM:
             property_chains=property_chains,
         )
 
-        if instance_iri:
-            if "id" in data and data["id"] != instance_iri:
-                self.logger.warning(
-                    f"Provided inconsistent ids for instance: 'instance_iri' is '{instance_iri}', 'data['id']' is '{data["id"]}'. Using 'instance_iri'."
-                )
-            data["id"] = instance_iri
-
-        model_cls = class_spec.to_pydantic_model()
-
-        try:
-            instance = model_cls.model_validate(data)
-        except ValidationError as e:
-            # if only ids are missing, we can generate them
-            if all(
-                error["type"] == "missing" and error["loc"][-1] == "id"
-                for error in e.errors()
-            ):
-                self._assign_ids_to_data_from_validation_error(
-                    model_cls=model_cls,
-                    validation_error=e,
-                    data=data,
-                    naming_schema=node_naming_schema or self.db.new_iri,
-                )
-                instance = model_cls.model_validate(data)
-            else:
-                self.logger.error(
-                    "Data validation error for class %s: %s", class_iri, e.errors()
-                )
-                raise e
-
         node = Node(
-            id=data["id"],
+            id=instance_iri,
             class_spec=class_spec,
             data=data,
-            instance=instance,
             ogm=self,
         )
 
+        if node.has_data:
+            node.materialize()
+
         if persist:
             triples = node.to_triples()
-            self.db.triples_add(triples)
+            self.db.triples_add(triples, named_graph=named_graph)
 
         return node
 
@@ -161,7 +136,6 @@ class OGM:
         model_cls: pd.BaseModel,
         validation_error: ValidationError,
         data: dict,
-        naming_schema: Callable[[], str],
     ):
         error_list = validation_error.errors()
         for error in error_list:
@@ -182,11 +156,14 @@ class OGM:
                 # update the data dict to the next link in the chain
                 data_dict = data_dict[pred][idx]
             model_iri = model._iri_model_name
-            instance_iri = naming_schema(base=model_iri + "_")
+            instance_iri = self._new_iri(base=model_iri)
             data_dict["id"] = instance_iri
             self.logger.debug(
                 f"Assigning '{model_iri.fragment}' instance at {loc} id '{instance_iri}'"
             )
+
+    def _new_iri(self, base: IRILike) -> IRI:
+        return self.db.new_iri(base, schema=self._naming_schema)
 
     def create_blank_instance(
         self,

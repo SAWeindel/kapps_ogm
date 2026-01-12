@@ -44,7 +44,7 @@ class ClassSpec:
             setattr(self, key, value)
         return self
 
-    def to_pydantic_model(self) -> Type[pd.BaseModel]:
+    def to_pydantic_model(self, forbid_extra: bool = True) -> Type[pd.BaseModel]:
         """
         Convert ClassSpec into a Pydantic model.
         Delegates to PropertySpec.to_pydantic_field() for consistent field generation.
@@ -67,14 +67,20 @@ class ClassSpec:
             field_name = prop_iri.lined
 
             # Delegate to PropertySpec for field generation (includes validators via Annotated types)
-            field_type, field = prop_spec.to_pydantic_field()
+            field_type, field = prop_spec.to_pydantic_field(forbid_extra=forbid_extra)
             fields[field_name] = (field_type, field)
 
         # Build the Pydantic model
         model_name = (
             self.iri.lined if self.iri else "AnonymousClass"
         )  # TODO: use graphdbs blanknode generator?
-        model_cls = pd.create_model(model_name, __base__=(self.pydantic_base_model,), **fields)  # type: ignore[call-overload] #TODO: is baseModel correct base here?
+        model_config = {"extra": "forbid"} if forbid_extra else {}
+        model_cls = pd.create_model(
+            model_name,
+            __base__=(self.pydantic_base_model,),
+            __config__=model_config,
+            **fields,
+        )  # type: ignore[call-overload] #TODO: is baseModel correct base here?
 
         # Keep mapping to IRIs for reference
         setattr(

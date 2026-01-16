@@ -287,7 +287,7 @@ class OGM:
         instance_iri: IRI,
         class_spec: Optional[ClassSpec] = None,
         property_chains: Optional[list[list[IRI]]] = None,
-        class_spec: Optional[ClassSpec] = None,
+        
         as_reference: bool = False,
         materialize: bool = False,
         

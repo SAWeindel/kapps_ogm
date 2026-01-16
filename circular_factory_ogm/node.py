@@ -13,7 +13,7 @@ from typing import (
 from collections import defaultdict
 from itertools import batched
 import logging
-
+import json
 from pydantic import BaseModel, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, ValidationError, core_schema
 from rdflib import BNode, Literal
@@ -224,7 +224,7 @@ class Node:
 
     def _assign_ids_to_data_from_validation_error(
         self,
-        model_cls: BaseModel,
+        model_cls: type[BaseModel],
         validation_error: ValidationError,
         data: dict,
     ):
@@ -248,7 +248,7 @@ class Node:
                 # update the pydantic model to the next link in the chain
                 model = model.model_fields[pred].annotation
                 # dig through the type hints until reaching the actual pydantic model
-                while not issubclass(model, BaseModel):
+                while not(isinstance(model, type) and issubclass(model, BaseModel)):
                     model = get_args(model)[0]
                 # update the data dict to the next link in the chain
                 data_dict = data_dict[pred][idx]

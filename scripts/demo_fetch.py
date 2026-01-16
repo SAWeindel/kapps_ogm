@@ -8,18 +8,8 @@ import aas_middleware as aas
 from graph_db_interface import GraphDBCredentials, GraphDB, IRI
 
 from circular_factory_ogm.ogm import OGM
-from circular_factory_ogm.mapping.class_spec import ClassSpec
-from circular_factory_ogm.loaders.loader_eh import loader_eh
-# property_chains = [
-#     [
-#         IRI("https://.../TransferUnit#hasConveyorBelt"),
-#         IRI("https://.../TransferUnit#hasConveyorPosition"),
-#     ],
-#     [
-#         IRI("https://.../TransferUnit#hasConveyorBelt"),
-#         IRI("https://.../TransferUnit#hasConveyorSpeed"),
-#     ],
-# ]'
+from circular_factory_ogm.utils.json_ogm_encoder import OGMEncoder
+
 property_chains = [
     [
         IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"),
@@ -32,6 +22,9 @@ property_chains = [
 ]
 instance_iri = IRI(
     "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#TransferUnit1"
+)
+class_iri = IRI(
+    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit"
 )
 
 
@@ -55,13 +48,25 @@ def main():
     db = GraphDB(credentials=credentials)
 
     # Refactored OGM: pass loader only
-    ogm = OGM(db=db, loader=None, logger=logger)
+    ogm = OGM(db=db, loader=None)
+    ogm.logger.setLevel(logging.DEBUG)
     node = ogm.fetch(
         instance_iri=instance_iri, property_chains=property_chains, materialize=True
     )
-    print(node.instance.model_dump_json(indent=4))
+    print(node.to_triples())
+    print(json.dumps(node.data, indent=4, cls=OGMEncoder))
 
+    node2 = ogm.create(
+        class_iri=class_iri,
+        property_chains=property_chains,
+        data=node.data,
+        persist=True,
+    )
 
+    print(node2.to_triples())
+    print(json.dumps(node2.data, indent=4, cls=OGMEncoder))
+
+    pass
 
 
 if __name__ == "__main__":

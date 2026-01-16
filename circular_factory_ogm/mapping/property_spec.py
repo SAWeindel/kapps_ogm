@@ -1,22 +1,34 @@
 from __future__ import annotations
 
 from typing import Optional, Type, TYPE_CHECKING, Any, Union, Annotated
+from enum import Enum
 from dataclasses import dataclass
 from graph_db_interface import IRI, XSDToPythonTypes
 import logging
 from pydantic import BeforeValidator, Field, conlist
 
+from circular_factory_ogm.utils.constants import (
+    PROPERTY_TYPES,
+    PROPERTY_CHARACTERISTICS,
+)
+
 if TYPE_CHECKING:
     from circular_factory_ogm.mapping.class_spec import ClassSpec
     from circular_factory_ogm.ogm import OGM
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("cf_pspec")
+
+
+class PropertyValueKind(Enum):
+    LITERAL = "literal"
+    OBJECT = "object"
+    COMPLEX = "complex"
 
 
 @dataclass
 class PropertySpec:
     iri: IRI
-    value_kind: str  # 'data' or 'object' or 'complex'
+    value_kind: PropertyValueKind  # 'data' or 'object' or 'complex'
     python_range_type: Optional[Type] = None
     min_count: Optional[int] = None
     max_count: Optional[int] = None
@@ -35,10 +47,13 @@ class PropertySpec:
 
         return property_spec_to_string(self)
 
-    def to_pydantic_field(self) -> tuple[Any, Any]:
+    def to_pydantic_field(self, forbid_extra: bool) -> tuple[Any, Any]:
         """Convert this PropertySpec into a Pydantic field with validators."""
+        logger.debug(
+            f"Converting PropertySpec ({self.value_kind.value}) '{self.iri.fragment}' to pydantic field"
+        )
 
-        if self.value_kind == "literal":
+        if self.value_kind is PropertyValueKind.LITERAL:
             # If all_from is set, use it as type restriction
             if self.all_from:
                 if isinstance(self.all_from, IRI):
@@ -48,16 +63,16 @@ class PropertySpec:
                 base_type = self.all_from
             else:
                 base_type = self.python_range_type or Any
-        elif self.value_kind == "object":
+        elif self.value_kind is PropertyValueKind.OBJECT:
             # Nested hydrated class becomes Pydantic model; else fallback to IRI
             if self.nested and getattr(self.nested, "_hydrated", False):
-                base_type = self.nested.to_pydantic_model()
+                base_type = self.nested.to_pydantic_model(forbid_extra=forbid_extra)
             else:
                 base_type = IRI
-        elif self.value_kind == "complex":
+        elif self.value_kind is PropertyValueKind.COMPLEX:
             # Complex properties have nested ClassSpec that should be converted to Pydantic model
             if self.nested:
-                base_type = self.nested.to_pydantic_model()
+                base_type = self.nested.to_pydantic_model(forbid_extra=forbid_extra)
             else:
                 base_type = Any
         else:
@@ -71,8 +86,10 @@ class PropertySpec:
         is_multi = max_count is None or max_count > 1 or min_count > 1
         if is_multi:
             field_type = conlist(base_type, min_length=min_count, max_length=max_count)
+            default = ... if self.required else []
         else:
             field_type = base_type
+            default = ... if self.required else None
 
         # Apply some_from / all_from validators using Annotated types
         if self.some_from or self.all_from:
@@ -108,7 +125,7 @@ class PropertySpec:
 
         # Create Pydantic Field
         field = Field(
-            default=... if self.required else None,
+            default=default,
             title=str(self.iri),
             description=f"PropertySpec for {self.iri}",
         )
@@ -116,59 +133,116 @@ class PropertySpec:
         return field_type, field
 
     @classmethod
-    def specify_literal_property(
+    def specify(
         cls,
+        prop_iri: IRI,
         ogm: "OGM",
-        prop: IRI,
     ) -> PropertySpec:
-        triples = ogm.db.triples_get(
-            sub=prop, pred=IRI("rdfs:range"), include_implicit=True
+        # Categorize the property regarding its type and characteristics
+        query_result = ogm.db.triples_get(
+            sub=prop_iri, pred="rdf:type", include_implicit=False
         )
-        range_iris = [triple[2] for triple in triples]
-        if len(range_iris) > 1:
+        property_types = [triple[2] for triple in query_result]
+
+        if not property_types:
+            raise ValueError(f"Property {prop_iri} has no rdf:type defined.")
+
+        base_types = []
+        characteristics = []
+
+        for ptype in property_types:
+            if ptype in PROPERTY_TYPES:
+                base_types.append(PROPERTY_TYPES[ptype])
+            elif ptype in PROPERTY_CHARACTERISTICS:
+                characteristics.append(PROPERTY_CHARACTERISTICS[ptype])
+
+        # Determine the property specification based on its range
+        query_result = ogm.db.triples_get(
+            sub=prop_iri, pred="rdfs:range", include_implicit=True
+        )
+
+        if len(query_result) == 0:
+            raise ValueError(f"Property {prop_iri} has no rdfs:range defined.")
+        elif len(query_result) > 1:
             raise ValueError(
-                f"Literal property {prop} has multiple rdfs:range defined: {range_iris}"
+                f"Property {prop_iri} has multiple rdfs:range defined: {[triple[2] for triple in query_result]}"
             )
-        if not range_iris:
-            raise ValueError(f"Literal property {prop} has no rdfs:range defined.")
-        range_iri = range_iris[0]
-        python_type = XSDToPythonTypes[range_iri]
+
+        prop_range = query_result[0][2]
+        if isinstance(prop_range, type):
+            property_spec = cls._specify_literal_property(prop_iri, prop_range)
+        elif isinstance(prop_range, IRI):
+            property_spec = cls._specify_class_property(prop_iri, prop_range)
+        else:
+            # Is blank node: Check if valid structure for complex datatype
+            query_is_complex_type = f"""
+                ASK {{
+                    BIND({prop_iri.n3()} AS ?property)
+                    ?property <http://www.w3.org/2000/01/rdf-schema#range> ?range .
+                    {{
+                        ?range a <http://www.w3.org/2002/07/owl#Restriction>
+                    }}
+                    UNION
+                    {{
+                        ?range <http://www.w3.org/2002/07/owl#intersectionOf> ?x
+                    }}
+                    UNION
+                    {{
+                        ?range <http://www.w3.org/2002/07/owl#unionOf> ?y
+                    }}
+                    UNION
+                    {{
+                        ?range <http://www.w3.org/2002/07/owl#complementOf> ?z
+                    }}
+                    UNION
+                    {{
+                        ?range <http://www.w3.org/2002/07/owl#oneOf> ?w
+                    }}
+                }}
+            """
+            if ogm.db.query(query_is_complex_type).get("boolean", False):
+                property_spec = cls._specify_complex_property(ogm, prop_iri)
+            else:
+                raise ValueError(
+                    f"Unknown property_type: {prop_range} for property {prop_iri}"
+                )
+
+        # Apply characteristics to the property_spec
+        if "functional" in characteristics:
+            property_spec.max_count = 1
+
+        return property_spec
+
+    @classmethod
+    def _specify_literal_property(
+        cls,
+        prop_iri: IRI,
+        python_type: type,
+    ) -> PropertySpec:
         property_spec = cls(
-            iri=prop,
-            value_kind="literal",
+            iri=prop_iri,
+            value_kind=PropertyValueKind.LITERAL,
             python_range_type=python_type,
-            required=False,
             max_count=None,
             min_count=None,
             nested=None,
         )
         logger.warning(
-            f"Warning: The property {prop} has not been checked for OWL constraints yet. You might want to verify cardinality and existential constraints."
+            f"Warning: The property {prop_iri} has not been checked for OWL constraints yet. You might want to verify cardinality and existential constraints."
         )
         return property_spec
 
     @classmethod
-    def specify_class_property(
+    def _specify_class_property(
         cls,
-        ogm: "OGM",
-        prop: IRI,
+        prop_iri: IRI,
+        range_iri: IRI,
     ) -> PropertySpec:
         from .class_spec import ClassSpec
 
-        triples = ogm.db.triples_get(
-            sub=prop, pred=IRI("rdfs:range"), include_implicit=True
-        )
-        range_iris = [triple[2] for triple in triples]
-        if len(range_iris) > 1:
-            raise ValueError(
-                f"Class property {prop} has multiple rdfs:range defined: {range_iris}"
-            )
-        if not range_iris:
-            raise ValueError(f"Class property {prop} has no rdfs:range defined.")
-        range_iri = range_iris[0]
         property_spec = cls(
-            iri=prop,
-            value_kind="object",
+            iri=prop_iri,
+            value_kind=PropertyValueKind.OBJECT,
             python_range_type=None,  # Will be another ClassSpec
             max_count=None,
             min_count=None,
@@ -177,10 +251,10 @@ class PropertySpec:
         return property_spec
 
     @classmethod
-    def specify_complex_property(
+    def _specify_complex_property(
         cls,
         ogm: "OGM",
-        prop: IRI,
+        prop_iri: IRI,
     ) -> PropertySpec:
         """
         Processes a complex OWL property and returns a PropertySpec with a nested ClassSpec
@@ -190,8 +264,8 @@ class PropertySpec:
 
         # Initialize top-level PropertySpec
         property_spec = cls(
-            iri=prop,
-            value_kind="complex",
+            iri=prop_iri,
+            value_kind=PropertyValueKind.COMPLEX,
             python_range_type=None,
             min_count=None,
             max_count=None,
@@ -205,7 +279,7 @@ class PropertySpec:
             ?effectiveMinCardinality ?effectiveMaxCardinality
             ?intersectionList ?unionList ?complementClass ?oneOfList
         WHERE {{
-            {prop.n3()} <http://www.w3.org/2000/01/rdf-schema#range> ?range .
+            {prop_iri.n3()} <http://www.w3.org/2000/01/rdf-schema#range> ?range .
 
             # IntersectionOf members
             OPTIONAL {{
@@ -261,10 +335,10 @@ class PropertySpec:
                 nested_spec = cls(
                     iri=nested_property,
                     value_kind=(
-                        "literal"
+                        PropertyValueKind.LITERAL
                         if "someValuesFrom" in restriction
                         or "allValuesFrom" in restriction
-                        else "object"
+                        else PropertyValueKind.OBJECT
                     ),
                     python_range_type=None,
                     min_count=None,
@@ -335,5 +409,5 @@ class PropertySpec:
         if property_spec.nested is not None:
             property_spec.nested._hydrated = True
 
-        #print(f"Complex property {prop} processed: {property_spec.to_string()}")
+        # print(f"Complex property {prop} processed: {property_spec.to_string()}")
         return property_spec

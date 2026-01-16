@@ -1,13 +1,25 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Dict, Optional, TypeVar, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Optional,
+    TypeVar,
+    Union,
+    Callable,
+    Type,
+    get_args,
+)
 from collections import defaultdict
-import json
+from itertools import batched
 import logging
 
 from pydantic import BaseModel, GetCoreSchemaHandler
-from pydantic_core import CoreSchema, core_schema
+from pydantic_core import CoreSchema, ValidationError, core_schema
 from rdflib import BNode, Literal
-from graph_db_interface import IRI, Triple, to_literal
+from graph_db_interface import IRI, to_literal
+from graph_db_interface.exceptions import InvalidIRIError
+from graph_db_interface.utils.types import Triple
 
 
 if TYPE_CHECKING:
@@ -15,6 +27,8 @@ if TYPE_CHECKING:
     from circular_factory_ogm.ogm import OGM
 
 T = TypeVar("T", bound=BaseModel)
+
+logger = logging.Logger("cf_node")
 
 
 class Node:
@@ -44,22 +58,23 @@ class Node:
         Either an explicit IRI/BNode or an instance exposing an ``id`` attribute
         must be provided. If both are given, they must match.
         """
-        if id is None and instance is None:
-            raise ValueError("Either 'id' or 'instance' must be provided")
+        if instance is not None and hasattr(instance, "id") and instance.id is not None:
+            if id is None:
+                id = instance.id
+            elif id != instance.id:
+                raise ValueError("Provided id does not match instance id")
 
-        # Keep BNode as is, convert string to IRI only if not already IRI/BNode
+        if data is not None and "id" in data and data["id"] is not None:
+            if id is None:
+                id = data["id"]
+            elif id != data["id"]:
+                raise ValueError("Provided id does not match instance id")
+
         if id is not None and not isinstance(id, (IRI, BNode)):
             id = IRI(id)
 
-        # Get instance id if available
-        instance_id = getattr(instance, "id", None) if instance is not None else None
-
-        # Validate id match if both provided
-        if id is not None and instance_id is not None and id != instance_id:
-            raise ValueError("Provided id does not match instance id")
-
         # Core attributes - use provided id or instance id
-        self.id: Optional[Union[IRI, BNode]] = id if id is not None else instance_id
+        self.id = id
         self.class_spec = class_spec
         self.data = data
         self.instance = instance
@@ -155,23 +170,94 @@ class Node:
         if self.data is None:
             raise ValueError("Cannot create instance without loaded data")
 
-        # Transform data keys from IRI objects to sanitized field names
-        transformed_data = {}
-        for key, value in self.data.items():
-            if isinstance(key, IRI):
-                # Use the sanitized field name that matches the Pydantic model
-                field_name = key.lined  # This should give us the sanitized name
-                transformed_data[field_name] = value
-            else:
-                # Keep non-IRI keys as-is (like 'id')
-                transformed_data[key] = value
+        model_cls = self.class_spec.to_pydantic_model(forbid_extra=False)
 
-        model_cls = self.class_spec.to_pydantic_model()
-        print("Expected fields:", model_cls.model_fields.keys())
-        print("Actual data keys:", transformed_data.keys())
-        validated_instance = model_cls.model_validate(transformed_data)
-        return validated_instance
-        
+        data = Node._format_data_for_validation(self.data)
+        try:
+            instance = model_cls.model_validate(data)
+        except ValidationError as e:
+            # if only ids are missing, we can generate them
+            if all(
+                error["type"] == "missing" and error["loc"][-1] == "id"
+                for error in e.errors()
+            ):
+                self._assign_ids_to_data_from_validation_error(
+                    model_cls=model_cls, validation_error=e, data=data
+                )
+                instance = model_cls.model_validate(data)
+            else:
+                logger.error(
+                    "Data validation error for class %s: %s",
+                    self.class_spec.iri,
+                    e.errors(),
+                )
+                raise e
+
+        # Extract id from data if not already set
+        if self.id is None and "id" in data:
+            self.id = IRI(data["id"])
+
+        return instance
+
+    @staticmethod
+    def _format_data_for_validation(data: Any) -> Any:
+        """
+        Recursively resolve property data to a model.
+        Converts Nodes to their data, property IRIs to their lined representation.
+        """
+        match data:
+            case dict():
+                formatted_data = {}
+                for k, v in data.items():
+                    try:
+                        key = IRI(k).lined
+                    except Exception:
+                        key = k
+                    formatted_data[key] = Node._format_data_for_validation(v)
+                return formatted_data
+            case list():
+                return [Node._format_data_for_validation(item) for item in data]
+            case Node():
+                return Node._format_data_for_validation(data.data)
+            case _:
+                return data
+
+    def _assign_ids_to_data_from_validation_error(
+        self,
+        model_cls: BaseModel,
+        validation_error: ValidationError,
+        data: dict,
+    ):
+        error_list = validation_error.errors()
+        for error in error_list:
+
+            # We need to dig through the error chain to get to the model missing its id
+            # error["loc"] is a tuple of the form (pred0, idx0, pred1, idx1, ..., "id")
+            # we need to follow the pairs of pred, idx to extract the
+            # model name and location in the data dict of the instance missing its id
+            loc = error["loc"][:-1]  # remove trailing "id"
+            if len(loc) == 0 and self.id is not None:
+                # Node has id, using this as top-level IRI instead of new IRI
+                data["id"] = self.id
+                logger.debug(f"Assigning top-level instance id '{self.id}'")
+                continue
+
+            model = model_cls  # tracks the head pydantic model
+            data_dict = data  # tracks the nested data dict
+            for pred, idx in batched(loc, n=2):
+                # update the pydantic model to the next link in the chain
+                model = model.model_fields[pred].annotation
+                # dig through the type hints until reaching the actual pydantic model
+                while not issubclass(model, BaseModel):
+                    model = get_args(model)[0]
+                # update the data dict to the next link in the chain
+                data_dict = data_dict[pred][idx]
+            model_iri = model._iri_model_name
+            instance_iri = self.ogm._new_iri(base=model_iri)
+            data_dict["id"] = instance_iri
+            logger.debug(
+                f"Assigning '{model_iri.fragment}' instance at {loc} id '{instance_iri}'"
+            )
 
     def materialize(self, *, reload: bool = False) -> BaseModel:
         """
@@ -264,8 +350,9 @@ class Node:
         if self.instance is None:
             raise RuntimeError("Node must be materialized before calling to_triples")
 
-        model = self.instance
-        iri_field_map: dict[str, IRI] = getattr(model.__class__, "_iri_fields", {})
+        iri_field_map: dict[str, IRI] = getattr(
+            self.instance.__class__, "_iri_fields", {}
+        )
 
         # We need either a ClassSpec or _iri_fields to know how to serialize
         if self.class_spec is None and not iri_field_map:
@@ -286,7 +373,7 @@ class Node:
 
         # Serialize all properties from the Pydantic model
         for field_name, prop_iri in iri_field_map.items():
-            value = getattr(model, field_name, None)
+            value = getattr(self.instance, field_name, None)
             if value is None:
                 continue
 

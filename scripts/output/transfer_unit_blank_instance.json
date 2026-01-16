@@ -4,23 +4,26 @@
     {
       "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorPosition": [
         {
-          "https_www_sfb1574_kit_edu_ontologies_inf_hasValue": [
+          "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue": [
             null
           ],
-          "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": [
+          "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasUnit": [
             null
           ]
         }
       ],
       "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorSpeed": [
         {
-          "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": [
+          "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue": [
             null
           ],
-          "https_www_sfb1574_kit_edu_ontologies_inf_hasValue": [
+          "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasUnit": [
             null
           ]
         }
+      ],
+      "https_www_sfb1574_kit_edu_ontologies_TransferUnit_isWorking": [
+        null
       ]
     }
   ],
@@ -28,13 +31,13 @@
     {
       "https_www_sfb1574_kit_edu_ontologies_TransferUnit_isOccupied": [
         {
-          "https_www_sfb1574_kit_edu_ontologies_inf_hasValue": [
-            null
-          ],
-          "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": [
+          "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue": [
             null
           ]
         }
+      ],
+      "https_www_sfb1574_kit_edu_ontologies_TransferUnit_isWorking": [
+        null
       ]
     }
   ]

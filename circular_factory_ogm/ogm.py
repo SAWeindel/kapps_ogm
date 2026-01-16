@@ -1,20 +1,18 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Optional, get_args
 import logging
 import pydantic as pd
 from pydantic import ValidationError
+from itertools import batched
 
 from graph_db_interface import GraphDB, IRI
+from graph_db_interface.utils.types import GraphNameLike, IRILike
 
 from circular_factory_ogm.node import Node
 from circular_factory_ogm.mapping.class_spec import ClassSpec
-from circular_factory_ogm.mapping.property_spec import PropertySpec
-from circular_factory_ogm.utils.blank_instance import (
-    _create_blank_instance,
-    _blank_instance_from_class_spec,
-    _blank_value_for_property,
-)
+from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
+from circular_factory_ogm.utils.blank_instance import _create_blank_instance
 from circular_factory_ogm.utils.loader_strategy import LoaderStrategy
 
 
@@ -29,6 +27,7 @@ class OGM:
         db: GraphDB,
         loader: Optional[LoaderStrategy] = None,
         logger: Optional[logging.Logger] = None,
+        naming_schema: Optional[Callable[[], str]] = None,
     ):
         """
         Args:
@@ -38,7 +37,9 @@ class OGM:
         """
         self.db = db
         self._loader = loader
+        self._naming_schema = naming_schema
         self.logger = logger or logging.getLogger("cf_ogm")
+        self.logger.setLevel(logging.DEBUG)
 
     # ------------------------------------------------------------------
     # Schema orchestration
@@ -84,8 +85,8 @@ class OGM:
         data: dict,
         property_chains: Optional[list[list[IRI]]] = None,
         instance_iri: Optional[IRI] = None,
-        node_naming_schema: Optional[Callable[[], str]] = None,
         persist: bool = True,
+        named_graph: Optional[GraphNameLike] = None,
     ) -> Node:
         """
         Create a new Node instance with given data.
@@ -94,7 +95,6 @@ class OGM:
             data: Data dictionary for the instance (must conform to class_spec)
             property_chains: Optional property chains for selective hydration
             instance_iri: Optional IRI for the new instance (if not provided, a new one will be generated)
-            node_naming_schema: Optional callable to generate node names/IRIs
             persist: Whether to persist the new instance to the graph database
         Returns:
             Node representing the newly created instance
@@ -115,32 +115,55 @@ class OGM:
             property_chains=property_chains,
         )
 
-        model_cls = class_spec.to_pydantic_model()
-
-        try:
-            instance = model_cls.model_validate(data)
-        except ValidationError as e:
-            self.logger.error("Data validation error for class %s: %s", class_iri, e)
-            raise
-
-        node_id = (
-            instance_iri or IRI(f"http://example.org/instances/{node_naming_schema()}")
-            if node_naming_schema
-            else IRI(f"http://example.org/instances/{class_iri.lined}-generated")
-        )
-
         node = Node(
-            id=node_id,
+            id=instance_iri,
             class_spec=class_spec,
             data=data,
-            instance=instance,
             ogm=self,
         )
 
+        if node.has_data:
+            node.materialize()
+
         if persist:
-            pass  # TODO: implement persistence logic here
+            triples = node.to_triples()
+            self.db.triples_add(triples, named_graph=named_graph)
 
         return node
+
+    def _assign_ids_to_data_from_validation_error(
+        self,
+        model_cls: pd.BaseModel,
+        validation_error: ValidationError,
+        data: dict,
+    ):
+        error_list = validation_error.errors()
+        for error in error_list:
+
+            # We need to dig through the error chain to get to the model missing its id
+            # error["loc"] is a tuple of the form (pred0, idx0, pred1, idx1, ..., "id")
+            # we need to follow the pairs of pred, idx to extract the
+            # model name and location in the data dict of the instance missing its id
+            loc = error["loc"][:-1]  # remove trailing "id"
+            model = model_cls  # tracks the head pydantic model
+            data_dict = data  # tracks the nested data dict
+            for pred, idx in batched(loc, n=2):
+                # update the pydantic model to the next link in the chain
+                model = model.model_fields[pred].annotation
+                # dig through the type hints until reaching the actual pydantic model
+                while not issubclass(model, pd.BaseModel):
+                    model = get_args(model)[0]
+                # update the data dict to the next link in the chain
+                data_dict = data_dict[pred][idx]
+            model_iri = model._iri_model_name
+            instance_iri = self._new_iri(base=model_iri)
+            data_dict["id"] = instance_iri
+            self.logger.debug(
+                f"Assigning '{model_iri.fragment}' instance at {loc} id '{instance_iri}'"
+            )
+
+    def _new_iri(self, base: IRILike) -> IRI:
+        return self.db.new_iri(base, schema=self._naming_schema)
 
     def create_blank_instance(
         self,
@@ -192,50 +215,58 @@ class OGM:
             return None
         else:
             if (
-                property_spec.value_kind == "data"
+                property_spec.value_kind is PropertyValueKind.LITERAL
             ):  # this is a datatype property without further chaining => cannot be expanded
-                data.append([str(obj) for subj, pred, obj in query_result])
+                data.extend([obj for subj, pred, obj in query_result])
 
-            elif property_spec.value_kind == "object":
-
-                if (
-                    property_spec.nested is not None
-                ):  # recursively fetch nested objects according to nested class spec
-                    nested_class_spec = property_spec.nested
-                    for subj, pred, obj in query_result:
-                        data.append(
-                            self.fetch(
+            elif property_spec.value_kind is PropertyValueKind.OBJECT:
+                # if there is a property chain given, and we are at the first element of it, we need to expand further
+                if property_chain is not None:
+                    if property_chain[0] == property_spec.iri:
+                        # we remove the first element and pass the rest down, call fetch recursively
+                        remaining_chain = property_chain[1:]
+                        for subj, pred, obj in query_result:
+                            nested_instance = self.fetch(
                                 instance_iri=obj,
-                                class_spec=nested_class_spec,
-                                
+                                class_spec=property_spec.nested,
+                                property_chains=(
+                                    [remaining_chain]
+                                    if len(remaining_chain) > 0
+                                    else None
+                                ),
+                                as_reference=False,
+                                materialize=materialize,
                             )
-                        )
-                else:  # fetch as references only
-                    for subj, pred, obj in query_result:
-                        data.append(
-                            self.fetch(
-                                instance_iri=obj,
-                                as_reference=True,
-                            ).data
-                        )
+                            data.append(nested_instance)
+                else:  # no property chain given, we treat the object just as reference
+                    nested_instance = self.fetch(
+                        instance_iri=obj,
+                        class_spec=property_spec.nested,
+                        as_reference=True,
+                    )
+                    data.append(nested_instance)
+
             elif (
-                property_spec.value_kind == "complex"
+                property_spec.value_kind is PropertyValueKind.COMPLEX
             ):  # this is a property that has a range of complex type/bnode (ie due to union or intersection)
 
                 nested_dict = {}
                 query = f"""
                     SELECT ?property ?value
+                    FROM <http://www.ontotext.com/explicit>
                     WHERE {{
                         <{instance_iri}> <{property_spec.iri}> ?intermediate .
                         ?intermediate ?property ?value .
                     }}
                 """
                 nested_query_result = (
-                    self.db.query(query).get("results", {}).get("bindings", [])
+                    self.db.query(query, convert_bindings=True)
+                    .get("results", {})
+                    .get("bindings", [])
                 )
                 for binding in nested_query_result:
-                    prop_iri = IRI(binding["property"]["value"])
-                    value = binding["value"]["value"]
+                    prop_iri = binding["property"]
+                    value = binding["value"]
                     if prop_iri not in nested_dict:
                         nested_dict[prop_iri] = []
                     nested_dict[prop_iri].append(value)
@@ -254,6 +285,7 @@ class OGM:
         self,
         *,
         instance_iri: IRI,
+        class_spec: Optional[ClassSpec] = None,
         property_chains: Optional[list[list[IRI]]] = None,
         class_spec: Optional[ClassSpec] = None,
         as_reference: bool = False,
@@ -271,31 +303,36 @@ class OGM:
         Returns:
             Node representing the fetched instance
         """
-        property_chains = (
-            property_chains
-            if property_chains is not None
-            else self._loader.expand(instance_iri) if self._loader else None
-        )
-        class_iri = self.db.owl_get_classes_of_individual(instance_iri)[0]
+        if property_chains is None and self._loader is not None:
+            property_chains = self._loader.expand(instance_iri)
+
         if class_spec is None:
+            class_iri = self.db.owl_get_classes_of_individual(instance_iri)[0]
             class_spec = self.get_class_spec(
                 class_iri=class_iri,
                 property_chains=property_chains,
             )
-        else:
-            class_spec = class_spec
+
         data = {}
-        data["id"] = str(instance_iri)  # every node must have an id at minimum
+        data["id"] = instance_iri  # every node must have an id at minimum
 
         if not as_reference:
             # Full fetch according to class spec (already filtered by property chains)
             for prop, prop_spec in class_spec.properties.items():
-                prop_data = self._get_property_data(
-                    prop_spec, instance_iri=instance_iri, 
-                )
-                # Only include properties that have actual data (not None or empty list)
-                if prop_data:  # This excludes both None and []
-                    data[prop] = prop_data
+                if property_chains is not None and len(property_chains) > 0:
+                    for chain in property_chains:
+                        if len(chain) > 0 and chain[0] == prop_spec.iri:
+                            # pass the rest of the chain for nested fetching
+                            data[prop] = self._get_property_data(
+                                prop_spec,
+                                instance_iri=instance_iri,
+                                property_chain=chain,
+                                materialize=materialize,
+                            )
+                else:
+                    data[prop] = self._get_property_data(
+                        prop_spec, instance_iri=instance_iri, materialize=materialize
+                    )
         else:
             # As reference: keep only the id
             pass

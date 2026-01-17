@@ -224,7 +224,7 @@ class ClassSpec:
                 # Rebuild nested ClassSpec with remaining chain tail
                 remaining_chain = property_chain[1:]
                 logger.debug(
-                    f"'{class_spec.iri.fragment}' specifies '{prop_spec.nested.iri.fragment}' following chain {[i.fragment for i in property_chain]}"
+                    f"'{class_spec.iri}' specifies '{prop_spec.nested.iri}' following chain {[i for i in property_chain]}"
                 )
                 nested_spec = cls.specify(
                     class_iri=prop_spec.nested.iri,

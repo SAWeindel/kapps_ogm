@@ -125,6 +125,10 @@ def main():
         class_iri=NODE_ID,
         data=deepcopy(mock_data),  # is modified by adding ids
         property_chains=property_chains,
+        persist=True,
+        named_graph=IRI(
+            "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances_generated"
+        ),
     )
     node1.materialize()
     node2.materialize()

@@ -119,40 +119,7 @@ class Node:
     # Explicit loading
     # -------------------------
 
-    def load_data(self, *, reload: bool = False) -> Dict[str, Any]:
-        """
-        Load and return raw instance data from the graph database.
-
-        Lazily fetches data for this node via the configured OGM loader and caches
-        the result. Subsequent calls return the cached data without re-querying
-        the database.
-
-        If ``reload`` is True, any cached data is discarded and the data is fetched
-        again from the database.
-
-        The returned data is a JSON-compatible dictionary structured according to
-        the nodes ClassSpec.
-
-        Args:
-        reload: If True, force a reload from the database even if data is cached.
-
-        Returns:
-            Dict[str, Any]: Raw instance data for this node. The result is cached
-            on the node.
-
-        Raises:
-            RuntimeError: If no OGM is attached to the node.
-
-        Notes:
-            - This method returns unvalidated raw data.
-            - For validated, type-safe access, use ``materialize()``.
-        """
-        if self.data is not None and not reload:
-            return self.data
-        if not self.ogm:
-            raise RuntimeError("No OGM attached to load data")
-        self.data = self.ogm._fetch_from_node(self)
-        return self.data
+   
 
     def _validate_instance(self) -> BaseModel:
         """
@@ -605,7 +572,19 @@ class Node:
         return triples
 
     def extract_property_chains(self) -> list[list[IRI | str]]:
-        """Extract property chains from nested node data."""
+        """
+        Extract property chains from nested node data.
+        
+        Reconstructs full IRIs from lined keys using hybrid lookup:
+        1. Direct IRI construction (already full IRI)
+        2. _iri_fields mapping (top-level properties from ClassSpec)
+        3. Decode from lined format (nested properties)
+        4. Fallback to string if all fail
+        
+        Returns:
+            list[list[IRI | str]]: Property chains from root to each terminal value,
+                                   with all keys normalized to full IRIs where possible.
+        """
         property_chains: list[list[IRI | str]] = []
 
         if not self.data:
@@ -613,47 +592,71 @@ class Node:
             return property_chains
 
         def normalize_key(key: str) -> IRI | str:
-            try:
-                return IRI(key)
-            except (InvalidIRIError, TypeError):
-                return key
-
-        def is_terminal(value: Any) -> bool:
-            if not isinstance(value, list):
-                return True
-            for item in value:
-                if not isinstance(item, dict):
-                    continue
-                for nested_value in item.values():
-                    if isinstance(nested_value, list) and any(
-                        isinstance(grand, dict) for grand in nested_value
-                    ):
-                        return False
-            return True
+            """
+            Normalize property key to IRI with hybrid lookup strategy.
+            
+            Resolves lined keys back to full IRIs in this order:
+            1. Try direct IRI construction (already full IRI)
+            2. Try _iri_fields mapping lookup (fast path for known top-level props)
+            3. Try decode from lined format (nested/dynamic props)
+            4. Return as string if all fail
+            """
+            # 1. Already a full IRI
+            if '://' in key:
+                try:
+                    return IRI(key)
+                except (InvalidIRIError, TypeError):
+                    pass
+            
+            # 2. Try mapping lookup (fast path)
+            if self.class_spec:
+                model = self.class_spec.to_pydantic_model()
+                iri_fields = getattr(model, '_iri_fields', {})
+                if key in iri_fields:
+                    return iri_fields[key]
+            
+            # 3. Fallback: decode from lined format
+            # Markers _c_, _s_, _d_, _h_ indicate a lined key
+            if any(marker in key for marker in ('_c_', '_s_', '_d_', '_h_')):
+                try:
+                    return IRI.from_lined(key)
+                except (InvalidIRIError, TypeError, ValueError):
+                    pass
+            
+            # 4. Return as string
+            return key
 
         def walk(value: Any, path: list[IRI | str]) -> None:
+            """Recursively walk nested structure, extracting terminal property paths."""
             if not isinstance(value, list):
                 return
             for item in value:
                 if not isinstance(item, dict):
+                    # Primitive value in list - don't go deeper
                     continue
+                # Item is a dict - walk through its properties
                 for key, child_value in item.items():
                     if key == "id":
                         continue
                     new_path = path + [normalize_key(key)]
-                    if is_terminal(child_value):
-                        property_chains.append(new_path)
-                    else:
+                    # Check if child_value contains more nested dicts
+                    has_nested_dicts = False
+                    if isinstance(child_value, list):
+                        for sub_item in child_value:
+                            if isinstance(sub_item, dict):
+                                has_nested_dicts = True
+                                break
+                    if has_nested_dicts:
+                        # Continue walking
                         walk(child_value, new_path)
+                    else:
+                        # Terminal - child_value is primitives or empty
+                        property_chains.append(new_path)
 
         for key, value in self.data.items():
             if key == "id":
                 continue
-            normalized_key = normalize_key(key)
-            if is_terminal(value):
-                property_chains.append([normalized_key])
-            else:
-                walk(value, [normalized_key])
+-            walk(value, [normalize_key(key)])
 
         return property_chains
 

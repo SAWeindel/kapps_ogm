@@ -22,9 +22,9 @@ property_chains = [
     [
         IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"),
     ],
-    [
-        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"),
-    ],
+    # [
+    #     IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"),
+    # ],
 ]
 
 mock_data = {
@@ -132,6 +132,11 @@ def main():
     )
     node1.materialize()
     node2.materialize()
+    node_1_instance = node1.instance
+    print("\nMaterialized instance of node1:")
+    print(node_1_instance.model_dump_json(indent=2))
+    with open(os.path.join(PATH, "output/transfer_unit_node1_instance.json"), "w") as f:
+        f.write(node_1_instance.model_dump_json(indent=2))
 
     # Test to_triples
     triples = node1.to_triples()

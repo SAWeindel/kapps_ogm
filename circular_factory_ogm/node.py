@@ -248,7 +248,7 @@ class Node:
                 # update the pydantic model to the next link in the chain
                 model = model.model_fields[pred].annotation
                 # dig through the type hints until reaching the actual pydantic model
-                while not(isinstance(model, type) and issubclass(model, BaseModel)):
+                while not (isinstance(model, type) and issubclass(model, BaseModel)):
                     model = get_args(model)[0]
                 # update the data dict to the next link in the chain
                 data_dict = data_dict[pred][idx]
@@ -303,7 +303,7 @@ class Node:
                     )
                     for v in value
                 ]
-            
+
         self.instance = self._validate_instance()
         return self.instance
 
@@ -603,6 +603,59 @@ class Node:
             triples.add((subject, predicate, to_literal(value)))
 
         return triples
+
+    def extract_property_chains(self) -> list[list[IRI | str]]:
+        """Extract property chains from nested node data."""
+        property_chains: list[list[IRI | str]] = []
+
+        if not self.data:
+            logger.debug("No data to extract property chains from.")
+            return property_chains
+
+        def normalize_key(key: str) -> IRI | str:
+            try:
+                return IRI(key)
+            except (InvalidIRIError, TypeError):
+                return key
+
+        def is_terminal(value: Any) -> bool:
+            if not isinstance(value, list):
+                return True
+            for item in value:
+                if not isinstance(item, dict):
+                    continue
+                for nested_value in item.values():
+                    if isinstance(nested_value, list) and any(
+                        isinstance(grand, dict) for grand in nested_value
+                    ):
+                        return False
+            return True
+
+        def walk(value: Any, path: list[IRI | str]) -> None:
+            if not isinstance(value, list):
+                return
+            for item in value:
+                if not isinstance(item, dict):
+                    continue
+                for key, child_value in item.items():
+                    if key == "id":
+                        continue
+                    new_path = path + [normalize_key(key)]
+                    if is_terminal(child_value):
+                        property_chains.append(new_path)
+                    else:
+                        walk(child_value, new_path)
+
+        for key, value in self.data.items():
+            if key == "id":
+                continue
+            normalized_key = normalize_key(key)
+            if is_terminal(value):
+                property_chains.append([normalized_key])
+            else:
+                walk(value, [normalized_key])
+
+        return property_chains
 
     @classmethod
     def __get_pydantic_core_schema__(

@@ -1,0 +1,42 @@
+{
+  "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit-53cd1af9-c73d-4c1b-a880-808d529b362e",
+  "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorBelt": [
+    {
+      "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#ConveyorBelt-5ba26b0f-c21b-4d0a-95fa-bbc3fa70a36a",
+      "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorPosition": [
+        {
+          "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue": [
+            1.25
+          ],
+          "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasUnit": [
+            "meters"
+          ]
+        }
+      ],
+      "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorSpeed": [
+        {
+          "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue": [
+            0.75
+          ],
+          "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasUnit": [
+            "meter_per_second"
+          ]
+        }
+      ],
+      "https_www_sfb1574_kit_edu_ontologies_TransferUnit_isWorking": []
+    }
+  ],
+  "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasLightBarrier": [
+    {
+      "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#LightBarrier-f1d007c4-ed75-41d8-a1e0-58de710da3f2",
+      "https_www_sfb1574_kit_edu_ontologies_TransferUnit_isOccupied": [
+        {
+          "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue": [
+            false
+          ]
+        }
+      ],
+      "https_www_sfb1574_kit_edu_ontologies_TransferUnit_isWorking": []
+    }
+  ]
+}

@@ -91,6 +91,25 @@ class ClassSpec:
         setattr(model_cls, "_iri_model_name", self.iri if self.iri else None)
 
         return model_cls
+    
+    @classmethod
+    def specify_from_instance(
+        instance: pd.BaseModel,
+        ogm: "OGM",
+    ) -> ClassSpec:
+        """
+        create a ClassSpec for the given Pydantic model by analyzing its RDF data in the GraphDB via the OGM instance.
+
+            Args:
+                model_cls: The Pydantic model class to specify
+                ogm: The OGM instance with access to the GraphDB
+            Returns:
+                A ClassSpec instance representing the class specification"""
+        iri = getattr(model_cls, "_iri_model_name", None)
+        if iri is None:
+            raise ValueError(f"Model {model_cls.__name__} has no associated IRI.")
+
+        return cls.specify(class_iri=iri, ogm=ogm)
 
     @classmethod
     def specify(

@@ -386,9 +386,34 @@ class OGM:
     def commit(
         self,
         *,
-        updated_node: Node,
-        previous_node: Optional[Node] = None,
-    ) -> None:
+        staged_node: Optional[Node]= None,
+        staged_instance: Optional[pd.BaseModel] = None,
+        
+        node_to_commit_to: Optional[Node] = None,
+        instance_to_commit_to: Optional[pd.BaseModel] = None,
+    ) -> bool:
+        
+        if staged_node is None and staged_instance is None:
+            raise ValueError("Either staged_node or staged_instance must be provided.")
+        if node_to_commit_to is None and instance_to_commit_to is None:
+            self.logger.warning("No target node or instance provided to commit to; use create instead.")
+            return False
+        
+        if staged_node is None and staged_instance is not None:
+            staged_node = Node(
+                id=getattr(staged_instance, "id", None),
+                class_spec=ClassSpec.specify_from_model(
+                    model_cls=type(staged_instance),
+                    ogm=self,
+                ),
+                data=staged_instance.model_dump(),
+                ogm=self,
+            )
+            
+    
+        
+        
+
         """
         Commit changes of an existing Node instance to the graph database.
 

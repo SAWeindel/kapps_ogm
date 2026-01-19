@@ -22,48 +22,45 @@ property_chains = [
     [
         IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"),
     ],
-    # [
-    #     IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"),
-    # ],
+    [
+        IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"),
+    ],
 ]
 
 mock_data = {
     # "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#TransferUnit1",
-    "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorBelt": [
+    "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorBelt": [
         {
             # "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#ConveyorBelt1_left",
-            "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorPosition": [
+            "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorPosition": [
                 {
-                    "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue": [
+                    "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": [
                         1.25
                     ],
-                    "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasUnit": [
+                    "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasUnit": [
                         "meters"
                     ],
                 }
             ],
-            "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorSpeed": [
+            "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorSpeed": [
                 {
-                    "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue": [
+                    "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": [
                         0.75
                     ],
-                    "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasUnit": [
+                    "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasUnit": [
                         "meter_per_second"
                     ],
                 }
             ],
         }
     ],
-    "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasLightBarrier": [
+    "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasLightBarrier": [
         {
             # "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#LightBarrier1_front",
-            "https_www_sfb1574_kit_edu_ontologies_TransferUnit_isOccupied": [
+            "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_isOccupied": [
                 {
-                    "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue": [
+                    "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": [
                         False
-                    ],
-                    "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasUnit": [
-                        "boolean"
                     ],
                 }
             ],

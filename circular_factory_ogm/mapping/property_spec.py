@@ -47,7 +47,7 @@ class PropertySpec:
 
         return property_spec_to_string(self)
 
-    def to_pydantic_field(self, forbid_extra: bool) -> tuple[Any, Any]:
+    def to_pydantic_field(self) -> tuple[Any, Any]:
         """Convert this PropertySpec into a Pydantic field with validators."""
         logger.debug(
             f"Converting PropertySpec ({self.value_kind.value}) '{self.iri.fragment}' to pydantic field"
@@ -66,13 +66,13 @@ class PropertySpec:
         elif self.value_kind is PropertyValueKind.OBJECT:
             # Nested hydrated class becomes Pydantic model; else fallback to IRI
             if self.nested and getattr(self.nested, "_hydrated", False):
-                base_type = self.nested.to_pydantic_model(forbid_extra=forbid_extra)
+                base_type = self.nested.to_pydantic_model()
             else:
                 base_type = IRI
         elif self.value_kind is PropertyValueKind.COMPLEX:
             # Complex properties have nested ClassSpec that should be converted to Pydantic model
             if self.nested:
-                base_type = self.nested.to_pydantic_model(forbid_extra=forbid_extra)
+                base_type = self.nested.to_pydantic_model()
             else:
                 base_type = Any
         else:

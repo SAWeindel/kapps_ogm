@@ -6,6 +6,7 @@ from typing import (
     Optional,
     TypeVar,
     Union,
+    List,
     Callable,
     Type,
     get_args,
@@ -19,7 +20,9 @@ from pydantic_core import CoreSchema, ValidationError, core_schema
 from rdflib import BNode, Literal
 from graph_db_interface import IRI, to_literal
 from graph_db_interface.exceptions import InvalidIRIError
-from graph_db_interface.utils.types import Triple
+from graph_db_interface.utils.types import Triple, IRILike
+
+from circular_factory_ogm.mapping.property_spec import PropertyValueKind
 
 
 if TYPE_CHECKING:
@@ -29,6 +32,7 @@ if TYPE_CHECKING:
 T = TypeVar("T", bound=BaseModel)
 
 logger = logging.Logger("cf_node")
+logger.setLevel(logging.DEBUG)
 
 
 class Node:
@@ -48,7 +52,7 @@ class Node:
         *,
         id: Optional[Union[str, IRI, BNode]] = None,
         class_spec: Optional["ClassSpec"] = None,
-        data: Optional[Dict[str, Any]] = None,
+        data: Optional[Dict[IRILike, List[Any]]] = None,
         instance: Optional[T] = None,
         ogm: Optional[OGM] = None,
     ):
@@ -76,32 +80,10 @@ class Node:
         # Core attributes - use provided id or instance id
         self.id = id
         self.class_spec = class_spec
-        self.data = data
-        self.instance = instance
         self.ogm = ogm
 
-        # Pretty print data for debugging
-        logger = (
-            self.ogm.logger
-            if self.ogm and hasattr(self.ogm, "logger")
-            else logging.getLogger("cf_ogm")
-        )
-        if logger.isEnabledFor(logging.DEBUG) and self.data:
-
-            def convert_to_serializable(obj):
-                """Convert IRI and other non-serializable objects to strings."""
-                if isinstance(obj, (IRI, BNode)):
-                    return str(obj)
-                elif isinstance(obj, dict):
-                    return {
-                        convert_to_serializable(k): convert_to_serializable(v)
-                        for k, v in obj.items()
-                    }
-                elif isinstance(obj, list):
-                    return [convert_to_serializable(item) for item in obj]
-                return obj
-
-            logger.debug(json.dumps(convert_to_serializable(self.data), indent=2))
+        self.data = data
+        self.instance = instance
 
     # -------------------------
     # Lifecycle helpers
@@ -119,112 +101,232 @@ class Node:
     # Explicit loading
     # -------------------------
 
-   
-
-    def _validate_instance(self) -> BaseModel:
+    @property
+    def data(self) -> Optional[Dict[IRI, List[Any]]]:
         """
-        Validate and build a Pydantic instance from the node's loaded data.
+        Get the raw instance data for this node.
 
         Returns:
-            BaseModel: A validated Pydantic model instance.
+            Optional[Dict[IRILike, List[Any]]]: Raw instance data if loaded, else None.
+        """
+        return self._data
+
+    @data.setter
+    def data(self, value: Dict[IRILike, List[Any]]) -> None:
+        """
+        Set or update the raw data for this node.
+
+        Args:
+            data (Dict): Raw instance data to set on the node.
+        """
+        if value is None:
+            self._data = None
+            return
+        self._sanitize_data(value)
+
+    def _sanitize_data(self, data: Dict) -> dict[IRI, List[Any]]:
+        """
+        Recursively converts provided data dict into a unified format.
+
+        The output is a dict with items in any of the forms:
+            - IRI: List[Any] # literal property -> list of literal values
+            - IRI: List[Node] # class property -> list of Node instances with IRI ids
+            - IRI: List[Node] # complex property -> list of Node instances with blank ids
+        In the input, property keys can be either str or IRI. Class and complex property values may be represented as dicts
 
         Raises:
-            ValueError: If ClassSpec or data is missing.
-            ValidationError: If the loaded data violates the ClassSpec constraints.
+            ValueError: If data cannot be converted into the expected format.
         """
-        if self.class_spec is None:
-            raise ValueError("Cannot create instance without ClassSpec")
+        if not isinstance(data, dict):
+            raise ValueError("Data must be a dictionary")
+
+        self._data = {}
+
+        for property_iri, domain_list in data.items():
+            # Catch special cases
+            if property_iri == "id":
+                self.id = IRI(domain_list)
+                continue
+
+            try:
+                property_iri = IRI(property_iri)
+            except Exception as e:
+                try:
+                    property_iri = IRI.from_lined(property_iri)
+                except Exception:
+                    raise ValueError(f"Invalid property in data: {property_iri}") from e
+
+            if not isinstance(domain_list, list):
+                raise ValueError(
+                    f"Property {property_iri} data must be a list, got {type(domain_list)}"
+                )
+
+            self._data[property_iri] = []
+
+            for domain_instance in domain_list:
+                if isinstance(domain_instance, Node):
+                    # Already a Node, use as is
+                    self._data[property_iri].append(domain_instance)
+                elif isinstance(domain_instance, dict):
+                    # Convert dict to Node
+                    node = Node(
+                        data=domain_instance,
+                        ogm=self.ogm,
+                    )
+                    self._data[property_iri].append(node)
+                else:
+                    self._data[property_iri].append(domain_instance)
+            logger.debug(
+                f"Converted property {property_iri} with {len(self._data[property_iri])} items to Node list"
+            )
+
+    def _validate_data(
+        self,
+        class_spec: Optional[ClassSpec] = None,
+        strict: bool = True,
+        # strict: bool = False,
+    ) -> None:
+        """
+        Validate the nodes data against its ClassSpec.
+
+        Args:
+            strict (bool): If True, enforce strict validation rules. In this case, no unknown properties are permitted. Defaults to True.
+        """
         if self.data is None:
-            raise ValueError("Cannot create instance without loaded data")
+            raise ValueError("Node does not contain data to validate")
 
-        model_cls = self.class_spec.to_pydantic_model(forbid_extra=False)
+        if self.class_spec is None:
+            if class_spec is None:
+                raise ValueError("Cannot validate data without ClassSpec")
+            self.class_spec = class_spec
 
-        data = Node._format_data_for_validation(self.data)
-        try:
-            instance = model_cls.model_validate(data)
-        except ValidationError as e:
-            # if only ids are missing, we can generate them
-            if all(
-                error["type"] == "missing" and error["loc"][-1] == "id"
-                for error in e.errors()
-            ):
-                self._assign_ids_to_data_from_validation_error(
-                    model_cls=model_cls, validation_error=e, data=data
+        # Check that node IRI is instance of ClassSpec IRI
+        if self.id is not None and self.class_spec.iri is not None:
+            if self.ogm.db.iri_exists(
+                self.id, as_sub=True, as_pred=True, as_obj=True
+            ) and not self.ogm.db.is_subclass(self.id, self.class_spec.iri):
+                raise ValueError(
+                    f"Node IRI {self.id} is known but is not an instance of ClassSpec {self.class_spec.iri}"
                 )
-                instance = model_cls.model_validate(data)
-            else:
-                logger.error(
-                    "Data validation error for class %s: %s",
-                    self.class_spec.iri,
-                    e.errors(),
+
+        # Check that data properties conform to ClassSpec properties
+        data_properties = set(self.data.keys())
+        permitted_properties = set(self.class_spec.properties.keys())
+        required_properties = set(
+            p for p, s in self.class_spec.properties.items() if s.required
+        )
+
+        if data_properties < required_properties:
+            missing_properties = required_properties - data_properties
+            raise ValueError(
+                f"Missing required properties in data for ClassSpec {self.class_spec.iri}: {missing_properties}"
+            )
+
+        if data_properties > permitted_properties:
+            unknown_properties = data_properties - permitted_properties
+            logger.warning(
+                f"Unknown properties in data for ClassSpec {self.class_spec.iri}: {unknown_properties}"
+            )
+            if strict:
+                raise ValueError(
+                    f"Unknown properties in data for ClassSpec {self.class_spec.iri}: {unknown_properties}"
                 )
-                raise e
 
-        # Extract id from data if not already set
-        if self.id is None and "id" in data:
-            self.id = IRI(data["id"])
+        known_properties = data_properties & permitted_properties
 
-        return instance
+        # Check each property against its specification
+        for property_iri in known_properties:
+            domain_list = self.data[property_iri]
+            prop_spec = self.class_spec.properties[property_iri]
 
-    @staticmethod
-    def _format_data_for_validation(data: Any) -> Any:
+            # Check cardinality. sh:minCount only enforced in strict, according to the OWA.
+            if prop_spec.min_count and len(domain_list) < prop_spec.min_count:
+                logger.warning(
+                    f"Node {self.id} property {property_iri} has fewer items ({len(domain_list)}) than min_count ({prop_spec.min_count})"
+                )
+                if strict:
+                    raise ValueError(
+                        f"Node {self.id} property {property_iri} has fewer items ({len(domain_list)}) than min_count ({prop_spec.min_count})"
+                    )
+
+            if prop_spec.max_count and len(domain_list) > prop_spec.max_count:
+                logger.warning(
+                    f"Node {self.id} property {property_iri} has more items ({len(domain_list)}) than max_count ({prop_spec.max_count})"
+                )
+                if strict:
+                    raise ValueError(
+                        f"Node {self.id} property {property_iri} has more items ({len(domain_list)}) than max_count ({prop_spec.max_count})"
+                    )
+
+            # Check type
+            match prop_spec.value_kind:
+                case PropertyValueKind.OBJECT | PropertyValueKind.COMPLEX:
+                    # TODO Add checks for owl:allValuesFrom and owl:someValuesFrom for object properties.
+                    # Maybe collect set of failed and passed checks?
+                    logger.info(
+                        f"Cardinality checks for object properties ({property_iri}) not implemented yet."
+                    )
+
+                    for domain_instance in domain_list:
+                        if not isinstance(domain_instance, Node):
+                            raise ValueError(
+                                f"Node {self.id} property {property_iri} expected Node instances, got literal"
+                            )
+                        # Recursively call nodes
+                        domain_instance._validate_data(
+                            class_spec=prop_spec.nested,
+                            strict=strict,
+                        )
+                case PropertyValueKind.LITERAL:
+                    permitted_types = prop_spec.python_range_type
+
+                    if not permitted_types:
+                        logger.debug(
+                            f"PropSpec {prop_spec.iri} has no permitted types defined, skipping type check."
+                        )
+                        continue
+
+                    # owl:allValuesFrom
+                    if prop_spec.all_from and not all(
+                        isinstance(domain_instance, permitted_types)
+                        for domain_instance in domain_list
+                    ):
+                        raise ValueError(
+                            f"Node {self.id} property {property_iri} expected owl:allValuesFrom {permitted_types}, got {type(domain_instance)}"
+                        )
+
+                    # owl:someValuesFrom. Only enforced in strict, according to the OWA.
+                    if prop_spec.some_from and not any(
+                        isinstance(domain_instance, permitted_types)
+                        for domain_instance in domain_list
+                    ):
+                        logger.warning(
+                            f"Node {self.id} property {property_iri} expected owl:someValuesFrom {permitted_types}, got {type(domain_instance)}"
+                        )
+                        if strict:
+                            raise ValueError(
+                                f"Node {self.id} property {property_iri} expected owl:someValuesFrom {permitted_types}, got {type(domain_instance)}"
+                            )
+
+    def _format_data_for_instance(self) -> Dict[str, List[Any]]:
         """
         Recursively resolve property data to a model.
         Converts Nodes to their data, property IRIs to their lined representation.
         """
-        match data:
-            case dict():
-                formatted_data = {}
-                for k, v in data.items():
-                    try:
-                        key = IRI(k).lined
-                    except Exception:
-                        key = k
-                    formatted_data[key] = Node._format_data_for_validation(v)
-                return formatted_data
-            case list():
-                return [Node._format_data_for_validation(item) for item in data]
-            case Node():
-                return Node._format_data_for_validation(data.data)
-            case _:
-                return data
+        if not self.id:
+            self.ogm._assign_id(self)
 
-    def _assign_ids_to_data_from_validation_error(
-        self,
-        model_cls: type[BaseModel],
-        validation_error: ValidationError,
-        data: dict,
-    ):
-        error_list = validation_error.errors()
-        for error in error_list:
-
-            # We need to dig through the error chain to get to the model missing its id
-            # error["loc"] is a tuple of the form (pred0, idx0, pred1, idx1, ..., "id")
-            # we need to follow the pairs of pred, idx to extract the
-            # model name and location in the data dict of the instance missing its id
-            loc = error["loc"][:-1]  # remove trailing "id"
-            if len(loc) == 0 and self.id is not None:
-                # Node has id, using this as top-level IRI instead of new IRI
-                data["id"] = self.id
-                logger.debug(f"Assigning top-level instance id '{self.id}'")
-                continue
-
-            model = model_cls  # tracks the head pydantic model
-            data_dict = data  # tracks the nested data dict
-            for pred, idx in batched(loc, n=2):
-                # update the pydantic model to the next link in the chain
-                model = model.model_fields[pred].annotation
-                # dig through the type hints until reaching the actual pydantic model
-                while not (isinstance(model, type) and issubclass(model, BaseModel)):
-                    model = get_args(model)[0]
-                # update the data dict to the next link in the chain
-                data_dict = data_dict[pred][idx]
-            model_iri = model._iri_model_name
-            instance_iri = self.ogm._new_iri(base=model_iri)
-            data_dict["id"] = instance_iri
-            logger.debug(
-                f"Assigning '{model_iri.fragment}' instance at {loc} id '{instance_iri}'"
-            )
+        formatted_data = {"id": self.id}
+        for property_iri, domain_list in self.data.items():
+            property_str = property_iri.lined
+            if domain_list and isinstance(domain_list[0], Node):
+                formatted_data[property_str] = [
+                    Node._format_data_for_instance(domain_item)
+                    for domain_item in domain_list
+                ]
+            else:
+                formatted_data[property_str] = domain_list.copy()
+        return formatted_data
 
     def materialize(self, *, reload: bool = False) -> BaseModel:
         """
@@ -255,23 +357,16 @@ class Node:
         """
         if self.instance is not None and not reload:
             return self.instance
-        if self.data is None or reload:
-            if not self.ogm:
-                raise RuntimeError("No OGM attached to load data")
-            self.load_data(reload=reload)
-        for key, value in self.data.items():
-            if isinstance(value, list) and value and isinstance(value[0], Node):
-                # we encounter a list of nodes, that have to be materialized before building the instance
-                self.data[key] = [
-                    (
-                        v.materialize(reload=reload)
-                        if not v.is_materialized
-                        else v.instance
-                    )
-                    for v in value
-                ]
+        if self.data is None:
+            raise RuntimeError("Node has no data")
+        if self.class_spec is None:
+            raise RuntimeError("Node has no ClassSpec")
 
-        self.instance = self._validate_instance()
+        self._validate_data()
+        formatted_data = self._format_data_for_instance()
+
+        model_cls = self.class_spec.to_pydantic_model()
+        self.instance = model_cls.model_validate(formatted_data)
         return self.instance
 
     # -------------------------
@@ -574,13 +669,13 @@ class Node:
     def extract_property_chains(self) -> list[list[IRI | str]]:
         """
         Extract property chains from nested node data.
-        
+
         Reconstructs full IRIs from lined keys using hybrid lookup:
         1. Direct IRI construction (already full IRI)
         2. _iri_fields mapping (top-level properties from ClassSpec)
         3. Decode from lined format (nested properties)
         4. Fallback to string if all fail
-        
+
         Returns:
             list[list[IRI | str]]: Property chains from root to each terminal value,
                                    with all keys normalized to full IRIs where possible.
@@ -594,7 +689,7 @@ class Node:
         def normalize_key(key: str) -> IRI | str:
             """
             Normalize property key to IRI with hybrid lookup strategy.
-            
+
             Resolves lined keys back to full IRIs in this order:
             1. Try direct IRI construction (already full IRI)
             2. Try _iri_fields mapping lookup (fast path for known top-level props)
@@ -602,27 +697,27 @@ class Node:
             4. Return as string if all fail
             """
             # 1. Already a full IRI
-            if '://' in key:
+            if "://" in key:
                 try:
                     return IRI(key)
                 except (InvalidIRIError, TypeError):
                     pass
-            
+
             # 2. Try mapping lookup (fast path)
             if self.class_spec:
                 model = self.class_spec.to_pydantic_model()
-                iri_fields = getattr(model, '_iri_fields', {})
+                iri_fields = getattr(model, "_iri_fields", {})
                 if key in iri_fields:
                     return iri_fields[key]
-            
+
             # 3. Fallback: decode from lined format
             # Markers _c_, _s_, _d_, _h_ indicate a lined key
-            if any(marker in key for marker in ('_c_', '_s_', '_d_', '_h_')):
+            if any(marker in key for marker in ("_c_", "_s_", "_d_", "_h_")):
                 try:
                     return IRI.from_lined(key)
                 except (InvalidIRIError, TypeError, ValueError):
                     pass
-            
+
             # 4. Return as string
             return key
 
@@ -656,9 +751,30 @@ class Node:
         for key, value in self.data.items():
             if key == "id":
                 continue
--            walk(value, [normalize_key(key)])
+            walk(value, [normalize_key(key)])
 
         return property_chains
+
+    def log_data_debug(self) -> None:
+        """
+        # Pretty print data for debugging
+        """
+        if logger.isEnabledFor(logging.DEBUG) and self.data:
+
+            def convert_to_serializable(obj):
+                """Convert IRI and other non-serializable objects to strings."""
+                if isinstance(obj, (IRI, BNode)):
+                    return str(obj)
+                elif isinstance(obj, dict):
+                    return {
+                        convert_to_serializable(k): convert_to_serializable(v)
+                        for k, v in obj.items()
+                    }
+                elif isinstance(obj, list):
+                    return [convert_to_serializable(item) for item in obj]
+                return obj
+
+            logger.debug(json.dumps(convert_to_serializable(self.data), indent=2))
 
     @classmethod
     def __get_pydantic_core_schema__(

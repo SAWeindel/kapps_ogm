@@ -1,42 +1,42 @@
 {
   "id": "http://example.org/instances/TransferUnit1",
-  "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorBelt": [
+  "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorBelt": [
     {
-      "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorPosition": [
+      "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorPosition": [
         {
-          "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue": [
+          "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": [
             null
           ],
-          "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasUnit": [
+          "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasUnit": [
             null
           ]
         }
       ],
-      "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorSpeed": [
+      "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorSpeed": [
         {
-          "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue": [
+          "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": [
             null
           ],
-          "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasUnit": [
+          "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasUnit": [
             null
           ]
         }
       ],
-      "https_www_sfb1574_kit_edu_ontologies_TransferUnit_isWorking": [
+      "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_isWorking": [
         null
       ]
     }
   ],
-  "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasLightBarrier": [
+  "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasLightBarrier": [
     {
-      "https_www_sfb1574_kit_edu_ontologies_TransferUnit_isOccupied": [
+      "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_isOccupied": [
         {
-          "https_www_sfb1574_kit_edu_ontologies_CrcInterfaces_hasValue": [
+          "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": [
             null
           ]
         }
       ],
-      "https_www_sfb1574_kit_edu_ontologies_TransferUnit_isWorking": [
+      "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_isWorking": [
         null
       ]
     }

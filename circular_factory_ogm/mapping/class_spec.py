@@ -7,7 +7,7 @@ import pydantic as pd
 
 from graph_db_interface import IRI
 from circular_factory_ogm.utils.pretty_print import class_spec_to_string
-from circular_factory_ogm.mapping.property_spec import PropertySpec
+from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 
 if TYPE_CHECKING:
     from circular_factory_ogm.ogm import OGM
@@ -44,7 +44,7 @@ class ClassSpec:
             setattr(self, key, value)
         return self
 
-    def to_pydantic_model(self, forbid_extra: bool = True) -> Type[pd.BaseModel]:
+    def to_pydantic_model(self) -> Type[pd.BaseModel]:
         """
         Convert ClassSpec into a Pydantic model.
         Delegates to PropertySpec.to_pydantic_field() for consistent field generation.
@@ -67,18 +67,16 @@ class ClassSpec:
             field_name = prop_iri.lined
 
             # Delegate to PropertySpec for field generation (includes validators via Annotated types)
-            field_type, field = prop_spec.to_pydantic_field(forbid_extra=forbid_extra)
+            field_type, field = prop_spec.to_pydantic_field()
             fields[field_name] = (field_type, field)
 
         # Build the Pydantic model
         model_name = (
             self.iri.lined if self.iri else "AnonymousClass"
         )  # TODO: use graphdbs blanknode generator?
-        model_config = {"extra": "forbid"} if forbid_extra else {}
         model_cls = pd.create_model(
             model_name,
             __base__=(self.pydantic_base_model,),
-            __config__=model_config,
             **fields,
         )  # type: ignore[call-overload] #TODO: is baseModel correct base here?
 
@@ -91,7 +89,7 @@ class ClassSpec:
         setattr(model_cls, "_iri_model_name", self.iri if self.iri else None)
 
         return model_cls
-    
+
     @classmethod
     def specify_from_instance(
         instance: pd.BaseModel,
@@ -230,14 +228,22 @@ class ClassSpec:
                 next_property = property_chain[0]
                 if next_property not in class_spec.properties:
                     raise ValueError(
-                        f"Property {next_property} not found in class {class_spec.iri} while processing property chain."
+                        f"Property {class_spec.iri} -> {next_property} not found while processing property chain."
                     )
 
                 prop_spec = class_spec.properties[next_property]
 
+                if prop_spec.value_kind != PropertyValueKind.OBJECT:
+                    logger.warning(
+                        f"Property {class_spec.iri} -> {next_property} of type '{prop_spec.value_kind.name}'."
+                        f"This property is always specified, only type 'object'"
+                        "should be used in property chains. Skipping."
+                    )
+                    continue
+
                 if prop_spec.nested is None:
                     raise ValueError(
-                        f"Property {next_property} has no nested ClassSpec (cannot continue property chain)."
+                        f"Property {class_spec.iri} -> {next_property} has no nested ClassSpec (cannot continue property chain)."
                     )
 
                 # Rebuild nested ClassSpec with remaining chain tail

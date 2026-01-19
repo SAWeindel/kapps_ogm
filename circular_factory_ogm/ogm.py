@@ -125,45 +125,11 @@ class OGM:
         if node.has_data:
             node.materialize()
 
-        if persist:
-            triples = node.to_triples()
-            self.db.triples_add(triples, named_graph=named_graph)
+            if persist:
+                triples = node.to_triples()
+                self.db.triples_add(triples, named_graph=named_graph)
 
         return node
-
-    def _assign_ids_to_data_from_validation_error(
-        self,
-        model_cls: pd.BaseModel,
-        validation_error: ValidationError,
-        data: dict,
-    ):
-        error_list = validation_error.errors()
-        for error in error_list:
-
-            # We need to dig through the error chain to get to the model missing its id
-            # error["loc"] is a tuple of the form (pred0, idx0, pred1, idx1, ..., "id")
-            # we need to follow the pairs of pred, idx to extract the
-            # model name and location in the data dict of the instance missing its id
-            loc = error["loc"][:-1]  # remove trailing "id"
-            model = model_cls  # tracks the head pydantic model
-            data_dict = data  # tracks the nested data dict
-            for pred, idx in batched(loc, n=2):
-                # update the pydantic model to the next link in the chain
-                model = model.model_fields[pred].annotation
-                # dig through the type hints until reaching the actual pydantic model
-                while not issubclass(model, pd.BaseModel):
-                    model = get_args(model)[0]
-                # update the data dict to the next link in the chain
-                data_dict = data_dict[pred][idx]
-            model_iri = model._iri_model_name
-            instance_iri = self._new_iri(base=model_iri)
-            data_dict["id"] = instance_iri
-            self.logger.debug(
-                f"Assigning '{model_iri.fragment}' instance at {loc} id '{instance_iri}'"
-            )
-
-    def _new_iri(self, base: IRILike) -> IRI:
-        return self.db.new_iri(base, schema=self._naming_schema)
 
     def create_blank_instance(
         self,
@@ -194,6 +160,16 @@ class OGM:
             property_chains=property_chains,
         )
 
+    def _assign_id(self, node: Node) -> None:
+        if node.class_spec is None:
+            raise ValueError(f"Node {node} has no ClassSpec, cannot assign id.")
+        model_iri = getattr(node.class_spec, "iri", None)
+        if model_iri:
+            instance_id = self.db.new_iri(base=model_iri, schema=self._naming_schema)
+        else:
+            instance_id = self.db.new_blank_id()
+        node.id = instance_id
+
     # ------------------------------------------------------------------
     # Fetching existing instances (Read)
     # ------------------------------------------------------------------
@@ -203,7 +179,7 @@ class OGM:
         property_spec: PropertySpec,
         instance_iri: IRI,
         property_chain: Optional[list[IRI]] = None,
-        
+        materialize: bool = False,
     ) -> Optional[list[Any]]:
         """
         Helper method to fetch property data for a given property spec and instance IRI.
@@ -278,8 +254,6 @@ class OGM:
                 )
 
             return data
-    
-    
 
     def fetch(
         self,
@@ -287,10 +261,8 @@ class OGM:
         instance_iri: IRI,
         class_spec: Optional[ClassSpec] = None,
         property_chains: Optional[list[list[IRI]]] = None,
-        
         as_reference: bool = False,
         materialize: bool = False,
-        
     ) -> Node:
         """
         Fetch an existing RDF instance from the database and return a Node for that instance.
@@ -336,9 +308,6 @@ class OGM:
         else:
             # As reference: keep only the id
             pass
-        
-        
-            
 
         node = Node(
             id=instance_iri,
@@ -352,33 +321,6 @@ class OGM:
             node.materialize()
         return node
 
-    def _fetch_from_node(self, node: Node) -> dict:
-        """
-        Populate a reference node with data from the graph database.
-
-        Internal orchestration method powering node.load_data() for selective
-        lazy loading. Respects node.class_spec property chains to hydrate only
-        requested fields.
-
-        Args:
-            node: Node with id and class_spec, but no data yet
-
-        Returns:
-            Dict[str, Any]: JSON-compatible data matching node.class_spec structure
-        """
-        if node.id is None:
-            raise ValueError("Cannot fetch data for a node without an id")
-
-        property_chains = getattr(node.class_spec, "property_chains", None)
-        fetched_node = self.fetch(
-            instance_iri=node.id,
-            property_chains=property_chains,
-            as_reference=False,
-            materialize=False,
-        )
-
-        return fetched_node.data or {}
-
     # ------------------------------------------------------------------
     # updating existing instances
     # ------------------------------------------------------------------
@@ -386,19 +328,20 @@ class OGM:
     def commit(
         self,
         *,
-        staged_node: Optional[Node]= None,
+        staged_node: Optional[Node] = None,
         staged_instance: Optional[pd.BaseModel] = None,
-        
         node_to_commit_to: Optional[Node] = None,
         instance_to_commit_to: Optional[pd.BaseModel] = None,
     ) -> bool:
-        
+
         if staged_node is None and staged_instance is None:
             raise ValueError("Either staged_node or staged_instance must be provided.")
         if node_to_commit_to is None and instance_to_commit_to is None:
-            self.logger.warning("No target node or instance provided to commit to; use create instead.")
+            self.logger.warning(
+                "No target node or instance provided to commit to; use create instead."
+            )
             return False
-        
+
         if staged_node is None and staged_instance is not None:
             staged_node = Node(
                 id=getattr(staged_instance, "id", None),
@@ -409,10 +352,6 @@ class OGM:
                 data=staged_instance.model_dump(),
                 ogm=self,
             )
-            
-    
-        
-        
 
         """
         Commit changes of an existing Node instance to the graph database.

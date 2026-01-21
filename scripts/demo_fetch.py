@@ -9,34 +9,7 @@ from graph_db_interface import GraphDBCredentials, GraphDB, IRI
 
 from circular_factory_ogm.ogm import OGM
 from circular_factory_ogm.utils.json_ogm_encoder import OGMEncoder
-
-
-def format_triples(triples):
-    """Format a set of RDF triples in a Turtle-like structure."""
-    from collections import defaultdict
-
-    # Group triples by subject
-    grouped = defaultdict(list)
-    for s, p, o in triples:
-        grouped[s].append((p, o))
-
-    output = []
-    for subject in sorted(grouped.keys(), key=str):
-        # Format subject
-        subj_str = str(subject)
-        output.append(f"\n{subj_str}")
-
-        # Format predicates and objects
-        predicates = grouped[subject]
-        for i, (pred, obj) in enumerate(predicates):
-            pred_str = str(pred)
-            obj_str = str(obj)
-            if i == len(predicates) - 1:
-                output.append(f"    {pred_str} {obj_str} .")
-            else:
-                output.append(f"    {pred_str} {obj_str} ;")
-
-    return "\n".join(output)
+from circular_factory_ogm.utils.pretty_print import format_triples_turtle
 
 
 property_chains = [
@@ -81,7 +54,7 @@ def main():
         instance_iri=instance_iri, property_chains=property_chains, materialize=True
     )
     print("=== Fetched Node Triples ===")
-    print(format_triples(node.to_triples()))
+    print(format_triples_turtle(node.to_triples()))
     print("\n=== Fetched Node Data ===")
     print(json.dumps(node.data, indent=4, cls=OGMEncoder))
     print("\n=== Fetched Node Instance ===")

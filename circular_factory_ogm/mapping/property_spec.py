@@ -43,9 +43,9 @@ class PropertySpec:
         return False
 
     def to_string(self) -> str:
-        from ..utils.pretty_print import property_spec_to_string
+        from ..utils.pretty_print import format_property_spec
 
-        return property_spec_to_string(self)
+        return format_property_spec(self)
 
     def to_pydantic_field(self) -> tuple[Any, Any]:
         """Convert this PropertySpec into a Pydantic field with validators."""

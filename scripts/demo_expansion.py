@@ -11,6 +11,7 @@ from circular_factory_ogm.ogm import OGM
 from circular_factory_ogm.mapping.class_spec import ClassSpec
 from circular_factory_ogm.loaders.loader_eh import loader_eh
 from circular_factory_ogm.utils.json_ogm_encoder import OGMEncoder
+from circular_factory_ogm.utils.pretty_print import format_triples_turtle
 
 PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -139,12 +140,8 @@ def main():
     # Test to_triples
     triples = node1.to_triples()
     print("Generated triples:")
-    for s, p, o in triples:
-        print(f"  {s}")
-        print(f"    {p}")
-        print(f"      {o}")
-        print()
-    print(f"Total: {len(triples)} triples\n")
+    print(format_triples_turtle(triples))
+    print(f"\nTotal: {len(triples)} triples\n")
 
     # Test to_json_ld
     json_ld = node1.to_json_ld(
@@ -152,7 +149,7 @@ def main():
             "ex": "https://example.org/",
             "tu": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#",
             "tui": "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#",
-            "inf": "https://www.sfb1574.kit.edu/ontologies/inf#",
+            "inf": "https://www.sfb1574.kit.edu/ontologies/Crcinterfaces#",
             "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
             "owl": "http://www.w3.org/2002/07/owl#",
         }

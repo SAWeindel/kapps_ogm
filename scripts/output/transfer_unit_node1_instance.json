@@ -1,42 +1,42 @@
 {
-  "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit-26f26799-b3e1-454b-9f64-b621db1aaf4a",
-  "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorBelt": [
+  "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit-4de5d5e4-d359-4b7e-b605-b1b964e9f314",
+  "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt": [
     {
-      "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#ConveyorBelt-0cc333ff-94dc-4540-89e2-c03b6f80a1cd",
-      "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorPosition": [
+      "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#ConveyorBelt-8f8e5155-5655-4680-b3e4-86dc99eb763d",
+      "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition": [
         {
-          "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": [
+          "https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue": [
             1.25
           ],
-          "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasUnit": [
+          "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit": [
             "meters"
           ]
         }
       ],
-      "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorSpeed": [
+      "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed": [
         {
-          "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": [
+          "https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue": [
             0.75
           ],
-          "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasUnit": [
+          "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit": [
             "meter_per_second"
           ]
         }
       ],
-      "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_isWorking": []
+      "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isWorking": []
     }
   ],
-  "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasLightBarrier": [
+  "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier": [
     {
-      "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#LightBarrier-ca78e49a-1895-4292-9944-c45ddf19a34d",
-      "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_isOccupied": [
+      "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#LightBarrier-bca46f6b-bfd0-47c8-896a-8db20b9a442c",
+      "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied": [
         {
-          "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": [
+          "https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue": [
             false
           ]
         }
       ],
-      "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_isWorking": []
+      "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isWorking": []
     }
   ]
 }

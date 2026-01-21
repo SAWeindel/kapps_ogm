@@ -9,7 +9,7 @@ from pydantic import ConfigDict  # Pydantic v2
 
 
 from graph_db_interface import IRI
-from circular_factory_ogm.utils.pretty_print import class_spec_to_string
+from circular_factory_ogm.utils.pretty_print import format_class_spec
 from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 
 if TYPE_CHECKING:
@@ -31,7 +31,7 @@ class ClassSpec:
     _hydrated: bool = field(default=False, init=False)
 
     def to_string(self) -> str:
-        return class_spec_to_string(self)
+        return format_class_spec(self)
 
     def hydrate(self, ogm: "OGM") -> ClassSpec:
         """

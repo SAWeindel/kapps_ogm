@@ -215,21 +215,9 @@ class Node:
     def log_data_debug(self) -> None:
         """Pretty print data for debugging."""
         if logger.isEnabledFor(logging.DEBUG) and self.data:
-
-            def convert_to_serializable(obj):
-                """Convert IRI and other non-serializable objects to strings."""
-                if isinstance(obj, (IRI, BNode)):
-                    return str(obj)
-                elif isinstance(obj, dict):
-                    return {
-                        convert_to_serializable(k): convert_to_serializable(v)
-                        for k, v in obj.items()
-                    }
-                elif isinstance(obj, list):
-                    return [convert_to_serializable(item) for item in obj]
-                return obj
-
-            logger.debug(json.dumps(convert_to_serializable(self.data), indent=2))
+            from circular_factory_ogm.utils.pretty_print import format_node_data
+            
+            logger.debug(json.dumps(format_node_data(self.data), indent=2))
 
     # -------------------------
     # Representation

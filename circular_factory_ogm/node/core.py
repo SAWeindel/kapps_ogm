@@ -6,7 +6,7 @@ import logging
 import json
 
 from pydantic import BaseModel, GetCoreSchemaHandler
-from pydantic_core import CoreSchema, ValidationError, core_schema
+from pydantic_core import CoreSchema, core_schema
 from rdflib import BNode
 from graph_db_interface import IRI
 from graph_db_interface.utils.types import Triple, IRILike
@@ -216,7 +216,7 @@ class Node:
         """Pretty print data for debugging."""
         if logger.isEnabledFor(logging.DEBUG) and self.data:
             from circular_factory_ogm.utils.pretty_print import format_node_data
-            
+
             logger.debug(json.dumps(format_node_data(self.data), indent=2))
 
     # -------------------------

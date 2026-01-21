@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Any, Dict, List
 import logging
 
 from graph_db_interface import IRI
-from graph_db_interface.exceptions import InvalidIRIError
 
 if TYPE_CHECKING:
     from .core import Node

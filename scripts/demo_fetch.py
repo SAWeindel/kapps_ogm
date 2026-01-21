@@ -1,10 +1,7 @@
 import os
 import logging
 import json
-import pydantic as pd
 
-import uvicorn
-import aas_middleware as aas
 from graph_db_interface import GraphDBCredentials, GraphDB, IRI
 
 from circular_factory_ogm.ogm import OGM

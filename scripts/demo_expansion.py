@@ -9,7 +9,6 @@ from graph_db_interface import GraphDBCredentials, GraphDB, IRI
 
 from circular_factory_ogm.ogm import OGM
 from circular_factory_ogm.mapping.class_spec import ClassSpec
-from circular_factory_ogm.loaders.loader_eh import loader_eh
 from circular_factory_ogm.utils.json_ogm_encoder import OGMEncoder
 from circular_factory_ogm.utils.pretty_print import format_triples_turtle
 
@@ -103,8 +102,6 @@ def main():
     with open(os.path.join(PATH, "output/transfer_unit_json_schema.json"), "w") as f:
         json.dump(schema, f, indent=2)
 
-    # node = ogm.create_node(id=NODE_ID)
-    # classify_outgoing_properties(node)
     blank_instance = ogm.create_blank_instance(
         class_iri=NODE_ID,
         property_chains=property_chains,

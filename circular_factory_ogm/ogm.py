@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Optional, get_args
+from typing import Any, Callable, Optional
 import logging
 import pydantic as pd
-from pydantic import ValidationError
-from itertools import batched
 
 from graph_db_interface import GraphDB, IRI
-from graph_db_interface.utils.types import GraphNameLike, IRILike
+from graph_db_interface.utils.types import GraphNameLike
 
 from circular_factory_ogm.node.core import Node
 from circular_factory_ogm.mapping.class_spec import ClassSpec

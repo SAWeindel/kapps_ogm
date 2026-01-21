@@ -1,7 +1,7 @@
 """Property chain extraction utilities for Node instances."""
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, List, Union
+from typing import TYPE_CHECKING, Any, Union
 import logging
 
 from graph_db_interface import IRI

@@ -9,12 +9,10 @@ from pydantic import BaseModel, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
 from rdflib import BNode
 from graph_db_interface import IRI
-from graph_db_interface.utils.types import Triple, IRILike
+from graph_db_interface.utils.types import IRILike
 
-from .node_serializer import NodeSerializer
 from .node_validator import NodeValidator
-from .node_data_formatter import NodeDataFormatter
-from .node_property_chains import NodePropertyChainExtractor
+from .node_data_formatter import sanitize_data, format_for_instance
 
 if TYPE_CHECKING:
     from circular_factory_ogm.mapping.class_spec import ClassSpec
@@ -121,7 +119,7 @@ class Node:
             return
 
         # Sanitize data through the formatter
-        sanitized, node_id = NodeDataFormatter.sanitize_data(value, self.ogm)
+        sanitized, node_id = sanitize_data(value, self.ogm)
         self._data = sanitized
 
         # Update node ID if found in data
@@ -170,7 +168,7 @@ class Node:
         NodeValidator.validate(self)
 
         # Format data for Pydantic
-        formatted_data = NodeDataFormatter.format_for_instance(self)
+        formatted_data = format_for_instance(self)
 
         model_cls = self.class_spec.to_pydantic_model()
         self.instance = model_cls.model_validate(formatted_data)
@@ -180,33 +178,13 @@ class Node:
     # Serialization (delegated)
     # -------------------------
 
-    def to_triples(self) -> set[Triple]:
-        """
-        Serialize the nodes current instance into RDF triples for persistence.
-
-        Delegates to NodeSerializer.to_triples().
-        """
-        return NodeSerializer.to_triples(self)
-
-    def to_json_ld(self, context: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-        """
-        Serialize the nodes instance into JSON-LD format.
-
-        Delegates to NodeSerializer.to_json_ld().
-        """
-        return NodeSerializer.to_json_ld(self, context)
+    from .node_serializer import to_triples, to_json_ld
 
     # -------------------------
     # Property chain extraction (delegated)
     # -------------------------
 
-    def extract_property_chains(self) -> list[list[IRI | str]]:
-        """
-        Extract property chains from nested node data.
-
-        Delegates to NodePropertyChainExtractor.extract().
-        """
-        return NodePropertyChainExtractor(self).extract()
+    from .node_property_chains import extract_property_chains
 
     # -------------------------
     # Debugging utilities

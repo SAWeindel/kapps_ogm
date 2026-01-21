@@ -5,6 +5,9 @@ from dataclasses import dataclass, field, asdict
 import logging
 import pydantic as pd
 
+from pydantic import ConfigDict  # Pydantic v2
+
+
 from graph_db_interface import IRI
 from circular_factory_ogm.utils.pretty_print import class_spec_to_string
 from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
@@ -79,6 +82,15 @@ class ClassSpec:
             __base__=(self.pydantic_base_model,),
             **fields,
         )  # type: ignore[call-overload] #TODO: is baseModel correct base here?
+
+        # Enforce no unknown properties at model level (replaces Node._validate_data unknown-check)
+        if ConfigDict is not None:
+            model_cls.model_config = ConfigDict(extra="forbid")
+        else:
+            class Config(getattr(self.pydantic_base_model, "Config", object)):
+                extra = "forbid"
+
+            model_cls.Config = Config
 
         # Keep mapping to IRIs for reference
         setattr(

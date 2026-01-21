@@ -1,4 +1,4 @@
-from .node import Node
+from .node.core import Node
 from .ogm import OGM
 
 # Import builders and loaders

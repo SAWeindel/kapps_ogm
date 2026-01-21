@@ -9,7 +9,7 @@ from itertools import batched
 from graph_db_interface import GraphDB, IRI
 from graph_db_interface.utils.types import GraphNameLike, IRILike
 
-from circular_factory_ogm.node import Node
+from circular_factory_ogm.node.core import Node
 from circular_factory_ogm.mapping.class_spec import ClassSpec
 from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from circular_factory_ogm.utils.blank_instance import _create_blank_instance

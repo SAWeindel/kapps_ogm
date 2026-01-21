@@ -1,8 +1,8 @@
 {
-  "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit-06a14a88-7598-4518-9b73-9a9de90bc344",
+  "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit-26f26799-b3e1-454b-9f64-b621db1aaf4a",
   "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorBelt": [
     {
-      "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#ConveyorBelt-47f7e725-afb2-471d-9d1d-8652f3c46f98",
+      "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#ConveyorBelt-0cc333ff-94dc-4540-89e2-c03b6f80a1cd",
       "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorPosition": [
         {
           "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": [
@@ -28,7 +28,7 @@
   ],
   "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasLightBarrier": [
     {
-      "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#LightBarrier-576976ec-2ebc-4e70-89b9-7611923965e8",
+      "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#LightBarrier-ca78e49a-1895-4292-9944-c45ddf19a34d",
       "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_isOccupied": [
         {
           "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": [

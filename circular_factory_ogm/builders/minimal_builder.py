@@ -4,7 +4,7 @@ import pydantic as pd
 from graph_db_interface import IRI, SPARQLQuery, process_bindings_select
 from aas_middleware.model.core import Identifiable
 
-from circular_factory_ogm.node import Node
+from circular_factory_ogm.node.core import Node
 
 FIELD_QUERY = """
 SELECT ?attr ?attribute_node ?field_pred ?field

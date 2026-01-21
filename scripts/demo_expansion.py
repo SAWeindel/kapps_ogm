@@ -10,6 +10,7 @@ from graph_db_interface import GraphDBCredentials, GraphDB, IRI
 from circular_factory_ogm.ogm import OGM
 from circular_factory_ogm.mapping.class_spec import ClassSpec
 from circular_factory_ogm.loaders.loader_eh import loader_eh
+from circular_factory_ogm.utils.json_ogm_encoder import OGMEncoder
 
 PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -131,9 +132,9 @@ def main():
     node2.materialize()
     node_1_instance = node1.instance
     print("\nMaterialized instance of node1:")
-    print(node_1_instance.model_dump_json(indent=2))
+    print(json.dumps(node_1_instance, indent=2, cls=OGMEncoder))
     with open(os.path.join(PATH, "output/transfer_unit_node1_instance.json"), "w") as f:
-        f.write(node_1_instance.model_dump_json(indent=2))
+        f.write(json.dumps(node_1_instance, indent=2, cls=OGMEncoder))
 
     # Test to_triples
     triples = node1.to_triples()

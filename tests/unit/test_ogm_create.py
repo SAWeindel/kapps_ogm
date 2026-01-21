@@ -15,7 +15,7 @@ from typing import Optional, List
 
 from graph_db_interface import IRI
 from circular_factory_ogm.ogm import OGM
-from circular_factory_ogm.node import Node
+from circular_factory_ogm.node.core import Node
 from circular_factory_ogm.mapping.class_spec import ClassSpec
 from circular_factory_ogm.mapping.property_spec import PropertySpec
 

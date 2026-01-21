@@ -7,7 +7,7 @@ from unittest.mock import Mock, MagicMock
 from graph_db_interface import GraphDB, IRI
 from circular_factory_ogm.ogm import OGM
 from circular_factory_ogm.mapping.class_spec import ClassSpec
-from circular_factory_ogm.node import Node
+from circular_factory_ogm.node.core import Node
 
 
 # Test data constants
@@ -22,13 +22,22 @@ PROPERTY_CHAINS = [
     [IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier")],
 ]
 
+HAS_CONVEYOR_BELT = IRI(
+    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"
+)
+HAS_CONVEYOR_SPEED = IRI(
+    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed"
+)
+HAS_VALUE = IRI("https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue")
+HAS_UNIT = IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit")
+
 MOCK_INSTANCE_DATA = {
-    "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorBelt": [
+    HAS_CONVEYOR_BELT.lined: [
         {
-            "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorSpeed": [
+            HAS_CONVEYOR_SPEED.lined: [
                 {
-                    "https_www_sfb1574_kit_edu_ontologies_inf_hasValue": [1.5],
-                    "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": ["m/s"],
+                    HAS_VALUE.lined: [1.5],
+                    HAS_UNIT.lined: ["m/s"],
                 }
             ]
         }

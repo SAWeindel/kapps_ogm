@@ -8,7 +8,7 @@ from graph_db_interface import IRI, SPARQLQuery
 from graph_db_interface import GraphDB, IRI
 from graph_db_interface.utils.pretty_print import shorten_block
 
-from circular_factory_ogm.node import Node
+from circular_factory_ogm.node.core import Node
 from circular_factory_ogm.ogm import OGM
 from circular_factory_ogm.utils.json_ogm_encoder import OGMEncoder
 

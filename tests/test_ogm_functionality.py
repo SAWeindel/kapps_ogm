@@ -31,31 +31,46 @@ PROPERTY_CHAINS = [
     [IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier")],
 ]
 
+# Common property IRIs used across fixtures
+HAS_CONVEYOR_BELT = IRI(
+    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"
+)
+HAS_CONVEYOR_POSITION = IRI(
+    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition"
+)
+HAS_CONVEYOR_SPEED = IRI(
+    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed"
+)
+HAS_LIGHT_BARRIER = IRI(
+    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"
+)
+IS_OCCUPIED = IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied")
+HAS_VALUE = IRI("https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue")
+HAS_UNIT = IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit")
+
 MOCK_DATA = {
-    "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorBelt": [
+    HAS_CONVEYOR_BELT.lined: [
         {
-            "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorPosition": [
+            HAS_CONVEYOR_POSITION.lined: [
                 {
-                    "https_www_sfb1574_kit_edu_ontologies_inf_hasValue": [1.25],
-                    "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": ["meters"],
+                    HAS_VALUE.lined: [1.25],
+                    HAS_UNIT.lined: ["meters"],
                 }
             ],
-            "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorSpeed": [
+            HAS_CONVEYOR_SPEED.lined: [
                 {
-                    "https_www_sfb1574_kit_edu_ontologies_inf_hasValue": [0.75],
-                    "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": [
-                        "meter_per_second"
-                    ],
+                    HAS_VALUE.lined: [0.75],
+                    HAS_UNIT.lined: ["meter_per_second"],
                 }
             ],
         }
     ],
-    "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasLightBarrier": [
+    HAS_LIGHT_BARRIER.lined: [
         {
-            "https_www_sfb1574_kit_edu_ontologies_TransferUnit_isOccupied": [
+            IS_OCCUPIED.lined: [
                 {
-                    "https_www_sfb1574_kit_edu_ontologies_inf_hasValue": [False],
-                    "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": ["boolean"],
+                    HAS_VALUE.lined: [False],
+                    HAS_UNIT.lined: ["boolean"],
                 }
             ]
         }
@@ -469,34 +484,28 @@ class TestIntegration:
         """
         # 1. Create a node with specific test data
         test_data = {
-            "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorBelt": [
+            HAS_CONVEYOR_BELT.lined: [
                 {
-                    "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorPosition": [
+                    HAS_CONVEYOR_POSITION.lined: [
                         {
-                            "https_www_sfb1574_kit_edu_ontologies_inf_hasValue": [2.5],
-                            "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": [
-                                "meters"
-                            ],
+                            HAS_VALUE.lined: [2.5],
+                            HAS_UNIT.lined: ["meters"],
                         }
                     ],
-                    "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorSpeed": [
+                    HAS_CONVEYOR_SPEED.lined: [
                         {
-                            "https_www_sfb1574_kit_edu_ontologies_inf_hasValue": [1.5],
-                            "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": [
-                                "meter_per_second"
-                            ],
+                            HAS_VALUE.lined: [1.5],
+                            HAS_UNIT.lined: ["meter_per_second"],
                         }
                     ],
                 }
             ],
-            "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasLightBarrier": [
+            HAS_LIGHT_BARRIER.lined: [
                 {
-                    "https_www_sfb1574_kit_edu_ontologies_TransferUnit_isOccupied": [
+                    IS_OCCUPIED.lined: [
                         {
-                            "https_www_sfb1574_kit_edu_ontologies_inf_hasValue": [True],
-                            "https_www_sfb1574_kit_edu_ontologies_inf_hasUnit": [
-                                "boolean"
-                            ],
+                            HAS_VALUE.lined: [True],
+                            HAS_UNIT.lined: ["boolean"],
                         }
                     ]
                 }
@@ -556,9 +565,7 @@ class TestIntegration:
         # 9. Verify original data values are preserved in instance
         assert original_data is not None
         # Verify specific values
-        conveyor_belt_data = original_data.get(
-            "https_www_sfb1574_kit_edu_ontologies_TransferUnit_hasConveyorBelt", []
-        )
+        conveyor_belt_data = original_data.get(HAS_CONVEYOR_BELT.lined, [])
         assert len(conveyor_belt_data) > 0
 
     def test_roundtrip_preserves_nested_structure(self, ogm: OGM):

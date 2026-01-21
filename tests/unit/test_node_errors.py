@@ -13,7 +13,7 @@ from unittest.mock import Mock, MagicMock
 from pydantic import BaseModel
 
 from graph_db_interface import IRI
-from circular_factory_ogm.node import Node
+from circular_factory_ogm.node.core import Node
 from circular_factory_ogm.mapping.class_spec import ClassSpec
 
 from .conftest import INSTANCE_IRI

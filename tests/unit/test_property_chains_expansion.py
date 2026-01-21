@@ -21,7 +21,7 @@ from copy import deepcopy
 from graph_db_interface import IRI
 from circular_factory_ogm.ogm import OGM
 from circular_factory_ogm.mapping.class_spec import ClassSpec
-from circular_factory_ogm.node import Node
+from circular_factory_ogm.node.core import Node
 
 
 # =====================================================================
@@ -32,41 +32,45 @@ TRANSFER_UNIT_IRI = IRI(
     "https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit"
 )
 
+HAS_CONVEYOR_BELT = IRI(
+    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"
+)
+HAS_CONVEYOR_POSITION = IRI(
+    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition"
+)
+HAS_CONVEYOR_SPEED = IRI(
+    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorSpeed"
+)
+HAS_LIGHT_BARRIER = IRI(
+    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"
+)
+IS_OCCUPIED = IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied")
+HAS_VALUE = IRI("https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue")
+HAS_UNIT = IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasUnit")
+
 MOCK_DATA = {
-    "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorBelt": [
+    HAS_CONVEYOR_BELT.lined: [
         {
-            "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorPosition": [
+            HAS_CONVEYOR_POSITION.lined: [
                 {
-                    "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": [
-                        1.25
-                    ],
-                    "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasUnit": [
-                        "meters"
-                    ],
+                    HAS_VALUE.lined: [1.25],
+                    HAS_UNIT.lined: ["meters"],
                 }
             ],
-            "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorSpeed": [
+            HAS_CONVEYOR_SPEED.lined: [
                 {
-                    "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": [
-                        0.75
-                    ],
-                    "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasUnit": [
-                        "meter_per_second"
-                    ],
+                    HAS_VALUE.lined: [0.75],
+                    HAS_UNIT.lined: ["meter_per_second"],
                 }
             ],
         }
     ],
-    "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasLightBarrier": [
+    HAS_LIGHT_BARRIER.lined: [
         {
-            "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_isOccupied": [
+            IS_OCCUPIED.lined: [
                 {
-                    "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": [
-                        False
-                    ],
-                    "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasUnit": [
-                        "boolean"
-                    ],
+                    HAS_VALUE.lined: [False],
+                    HAS_UNIT.lined: ["boolean"],
                 }
             ],
         }
@@ -257,26 +261,20 @@ class TestPropertyChainsExpansion:
         - hasConveyorBelt → hasConveyorPosition (blank node)
         - hasConveyorPosition → hasValue, hasUnit (literals)
         """
-        # Check hasConveyorBelt structure (using lined keys)
         belt_key = list(MOCK_DATA.keys())[0]
-        assert "hasConveyorBelt" in belt_key
+        assert HAS_CONVEYOR_BELT.lined == belt_key
 
         belt_data = MOCK_DATA[belt_key][0]
-        # Keys are in lined format, so check for _h_ marker
-        assert any("hasConveyorPosition" in k for k in belt_data.keys())
-        assert any("hasConveyorSpeed" in k for k in belt_data.keys())
+        assert HAS_CONVEYOR_POSITION.lined in belt_data
+        assert HAS_CONVEYOR_SPEED.lined in belt_data
 
-        # Get the actual hasConveyorPosition key
-        position_key = [k for k in belt_data.keys() if "hasConveyorPosition" in k][0]
-        position_data = belt_data[position_key][0]
+        position_data = belt_data[HAS_CONVEYOR_POSITION.lined][0]
 
-        # Check hasConveyorPosition contains blank node properties
-        assert any("hasValue" in k for k in position_data.keys())
-        assert any("hasUnit" in k for k in position_data.keys())
+        assert HAS_VALUE.lined in position_data
+        assert HAS_UNIT.lined in position_data
 
         # Check that values are literals (not nested dicts)
-        value_key = [k for k in position_data.keys() if "hasValue" in k][0]
-        assert isinstance(position_data[value_key][0], (int, float, str, bool))
+        assert isinstance(position_data[HAS_VALUE.lined][0], (int, float, str, bool))
 
 
 # =====================================================================

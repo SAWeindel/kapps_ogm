@@ -53,6 +53,8 @@ class PropertySpec:
             f"Converting PropertySpec ({self.value_kind.value}) '{self.iri.fragment}' to pydantic field"
         )
 
+        validators = []
+
         if self.value_kind is PropertyValueKind.LITERAL:
             # If all_from is set, use it as type restriction
             if self.all_from:
@@ -66,13 +68,69 @@ class PropertySpec:
         elif self.value_kind is PropertyValueKind.OBJECT:
             # Nested hydrated class becomes Pydantic model; else fallback to IRI
             if self.nested and getattr(self.nested, "_hydrated", False):
-                base_type = self.nested.to_pydantic_model()
+                nested_model = self.nested.to_pydantic_model()
+                base_type = nested_model
+
+                def coerce_object(value):
+                    parse = getattr(nested_model, "model_validate", None) or getattr(
+                        nested_model, "parse_obj", None
+                    )
+                    if value is None:
+                        return value
+                    if isinstance(value, nested_model):
+                        return value
+                    try:
+                        from circular_factory_ogm.node.core import Node  # Lazy import to avoid cycles
+                    except Exception:
+                        Node = None
+
+                    if Node is not None and isinstance(value, Node):
+                        payload = getattr(value, "instance", None) or getattr(
+                            value, "data", None
+                        )
+                        if payload is not None and parse is not None:
+                            return parse(payload)
+                        return value
+
+                    if isinstance(value, dict) and parse is not None:
+                        return parse(value)
+                    return value
+
+                validators.append(BeforeValidator(coerce_object))
             else:
                 base_type = IRI
         elif self.value_kind is PropertyValueKind.COMPLEX:
             # Complex properties have nested ClassSpec that should be converted to Pydantic model
             if self.nested:
-                base_type = self.nested.to_pydantic_model()
+                nested_model = self.nested.to_pydantic_model()
+                base_type = nested_model
+
+                def coerce_complex(value):
+                    parse = getattr(nested_model, "model_validate", None) or getattr(
+                        nested_model, "parse_obj", None
+                    )
+                    if value is None:
+                        return value
+                    if isinstance(value, nested_model):
+                        return value
+                    try:
+                        from circular_factory_ogm.node.core import Node  # Lazy import to avoid cycles
+                    except Exception:
+                        Node = None
+
+                    if Node is not None and isinstance(value, Node):
+                        payload = getattr(value, "instance", None) or getattr(
+                            value, "data", None
+                        )
+                        if payload is not None and parse is not None:
+                            return parse(payload)
+                        return value
+
+                    if isinstance(value, dict) and parse is not None:
+                        return parse(value)
+                    return value
+
+                validators.append(BeforeValidator(coerce_complex))
             else:
                 base_type = Any
         else:
@@ -93,31 +151,29 @@ class PropertySpec:
 
         # Apply some_from / all_from validators using Annotated types
         if self.some_from or self.all_from:
-
-            def make_validator(some_type, all_type):
-                def validate(v):
-                    if v is None:
-                        return v
-                    values = v if isinstance(v, list) else [v]
-
-                    if some_type is not None:
-                        if not any(isinstance(x, some_type) for x in values):
-                            raise ValueError(
-                                f"Property {self.iri} requires at least one value of type {some_type}"
-                            )
-
-                    if all_type is not None:
-                        if not all(isinstance(x, all_type) for x in values):
-                            raise ValueError(
-                                f"Property {self.iri} requires all values to be of type {all_type}"
-                            )
-
+            def validate_some_all(v):
+                if v is None:
                     return v
+                values = v if isinstance(v, list) else [v]
 
-                return validate
+                if self.some_from is not None:
+                    if not any(isinstance(x, self.some_from) for x in values):
+                        raise ValueError(
+                            f"Property {self.iri} requires at least one value of type {self.some_from}"
+                        )
 
-            validator = BeforeValidator(make_validator(self.some_from, self.all_from))
-            field_type = Annotated[field_type, validator]
+                if self.all_from is not None:
+                    if not all(isinstance(x, self.all_from) for x in values):
+                        raise ValueError(
+                            f"Property {self.iri} requires all values to be of type {self.all_from}"
+                        )
+
+                return v
+
+            validators.append(BeforeValidator(validate_some_all))
+
+        if validators:
+            field_type = Annotated[field_type, *validators]
 
         # Wrap in Optional if not required
         if not self.required:

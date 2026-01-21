@@ -49,92 +49,100 @@ class PropertySpec:
 
     def to_pydantic_field(self) -> tuple[Any, Any]:
         """Convert this PropertySpec into a Pydantic field with validators."""
+        if not self.value_kind in PropertyValueKind:
+            raise ValueError(f"Unknown value_kind: {self.value_kind}")
+
         logger.debug(
             f"Converting PropertySpec ({self.value_kind.value}) '{self.iri.fragment}' to pydantic field"
         )
 
         validators = []
 
-        if self.value_kind is PropertyValueKind.LITERAL:
-            # If all_from is set, use it as type restriction
-            if self.all_from:
-                if isinstance(self.all_from, IRI):
-                    raise ValueError(
-                        f"Literal property {self.iri} cannot have allValuesFrom as Object IRI"
-                    )
-                base_type = self.all_from
-            else:
-                base_type = self.python_range_type or Any
-        elif self.value_kind is PropertyValueKind.OBJECT:
-            # Nested hydrated class becomes Pydantic model; else fallback to IRI
-            if self.nested and getattr(self.nested, "_hydrated", False):
-                nested_model = self.nested.to_pydantic_model()
-                base_type = nested_model
-
-                def coerce_object(value):
-                    parse = getattr(nested_model, "model_validate", None) or getattr(
-                        nested_model, "parse_obj", None
-                    )
-                    if value is None:
-                        return value
-                    if isinstance(value, nested_model):
-                        return value
-                    try:
-                        from circular_factory_ogm.node.core import Node  # Lazy import to avoid cycles
-                    except Exception:
-                        Node = None
-
-                    if Node is not None and isinstance(value, Node):
-                        payload = getattr(value, "instance", None) or getattr(
-                            value, "data", None
+        match self.value_kind:
+            case PropertyValueKind.LITERAL:
+                # If all_from is set, use it as type restriction
+                if self.all_from:
+                    if isinstance(self.all_from, IRI):
+                        raise ValueError(
+                            f"Literal property {self.iri} cannot have allValuesFrom as Object IRI"
                         )
-                        if payload is not None and parse is not None:
-                            return parse(payload)
+                    base_type = self.all_from
+                else:
+                    base_type = self.python_range_type or Any
+            case PropertyValueKind.OBJECT:
+                # Nested hydrated class becomes Pydantic model; else fallback to IRI
+                if self.nested and getattr(self.nested, "_hydrated", False):
+                    nested_model = self.nested.to_pydantic_model()
+                    base_type = nested_model
+
+                    def coerce_object(value):
+                        parse = getattr(
+                            nested_model, "model_validate", None
+                        ) or getattr(nested_model, "parse_obj", None)
+                        if value is None:
+                            return value
+                        if isinstance(value, nested_model):
+                            return value
+                        try:
+                            from circular_factory_ogm.node.core import (
+                                Node,
+                            )  # Lazy import to avoid cycles
+                        except Exception:
+                            Node = None
+
+                        if Node is not None and isinstance(value, Node):
+                            payload = getattr(value, "instance", None) or getattr(
+                                value, "data", None
+                            )
+                            if payload is not None and parse is not None:
+                                return parse(payload)
+                            return value
+
+                        if isinstance(value, dict) and parse is not None:
+                            return parse(value)
                         return value
 
-                    if isinstance(value, dict) and parse is not None:
-                        return parse(value)
-                    return value
+                    validators.append(BeforeValidator(coerce_object))
+                else:
+                    base_type = IRI
+            case PropertyValueKind.COMPLEX:
+                # Complex properties have nested ClassSpec that should be converted to Pydantic model
+                if self.nested:
+                    nested_model = self.nested.to_pydantic_model()
+                    base_type = nested_model
 
-                validators.append(BeforeValidator(coerce_object))
-            else:
-                base_type = IRI
-        elif self.value_kind is PropertyValueKind.COMPLEX:
-            # Complex properties have nested ClassSpec that should be converted to Pydantic model
-            if self.nested:
-                nested_model = self.nested.to_pydantic_model()
-                base_type = nested_model
+                    def coerce_complex(value):
+                        parse = getattr(
+                            nested_model, "model_validate", None
+                        ) or getattr(nested_model, "parse_obj", None)
+                        if value is None:
+                            return value
+                        if isinstance(value, nested_model):
+                            return value
+                        try:
+                            from circular_factory_ogm.node.core import (
+                                Node,
+                            )  # Lazy import to avoid cycles
+                        except Exception:
+                            Node = None
 
-                def coerce_complex(value):
-                    parse = getattr(nested_model, "model_validate", None) or getattr(
-                        nested_model, "parse_obj", None
-                    )
-                    if value is None:
+                        if Node is not None and isinstance(value, Node):
+                            payload = getattr(value, "instance", None) or getattr(
+                                value, "data", None
+                            )
+                            if payload is not None and parse is not None:
+                                return parse(payload)
+                            return value
+
+                        if isinstance(value, dict) and parse is not None:
+                            return parse(value)
                         return value
-                    if isinstance(value, nested_model):
-                        return value
-                    try:
-                        from circular_factory_ogm.node.core import Node  # Lazy import to avoid cycles
-                    except Exception:
-                        Node = None
 
-                    if Node is not None and isinstance(value, Node):
-                        payload = getattr(value, "instance", None) or getattr(
-                            value, "data", None
-                        )
-                        if payload is not None and parse is not None:
-                            return parse(payload)
-                        return value
-
-                    if isinstance(value, dict) and parse is not None:
-                        return parse(value)
-                    return value
-
-                validators.append(BeforeValidator(coerce_complex))
-            else:
-                base_type = Any
-        else:
-            raise ValueError(f"Unknown value_kind: {self.value_kind}")
+                    validators.append(BeforeValidator(coerce_complex))
+                else:
+                    base_type = Any
+            case _:
+                raise RuntimeError
 
         # cardinality
         min_count = self.min_count or 0
@@ -151,6 +159,7 @@ class PropertySpec:
 
         # Apply some_from / all_from validators using Annotated types
         if self.some_from or self.all_from:
+
             def validate_some_all(v):
                 if v is None:
                     return v

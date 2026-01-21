@@ -7,11 +7,8 @@ Tests Phase 1.1: Database Loading & Fetching
 - Error handling for missing or multiple types
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
-from graph_db_interface import IRI
-from circular_factory_ogm.ogm import OGM
 from circular_factory_ogm.node.core import Node
 from circular_factory_ogm.mapping.class_spec import ClassSpec
 
@@ -29,10 +26,11 @@ class TestOGMFetch:
     def test_fetch_existing_instance(self, ogm_with_mock_db, mock_db):
         """Test fetching an existing instance from the database."""
         # Setup: Mock database returns type information
-        mock_db.triples_get.return_value = [(INSTANCE_IRI, RDF_TYPE, TRANSFER_UNIT_IRI)]
+        mock_db.owl_get_classes_of_individual.return_value = [TRANSFER_UNIT_IRI]
 
         # Mock get_class_spec to avoid complex database queries
         mock_class_spec = Mock(spec=ClassSpec)
+        mock_class_spec.properties = {}
         with patch.object(
             ogm_with_mock_db, "get_class_spec", return_value=mock_class_spec
         ):
@@ -48,16 +46,15 @@ class TestOGMFetch:
         assert node.ogm == ogm_with_mock_db
 
         # Verify database was queried for type
-        mock_db.triples_get.assert_called_once_with(
-            sub=INSTANCE_IRI, pred=RDF_TYPE, include_implicit=True
-        )
+        mock_db.owl_get_classes_of_individual.assert_called_once_with(INSTANCE_IRI)
 
     def test_fetch_with_property_chains(self, ogm_with_mock_db, mock_db):
         """Test that fetch passes property_chains to get_class_spec."""
         # Setup
-        mock_db.triples_get.return_value = [(INSTANCE_IRI, RDF_TYPE, TRANSFER_UNIT_IRI)]
+        mock_db.owl_get_classes_of_individual.return_value = [TRANSFER_UNIT_IRI]
 
         mock_class_spec = Mock(spec=ClassSpec)
+        mock_class_spec.properties = {}
         with patch.object(
             ogm_with_mock_db, "get_class_spec", return_value=mock_class_spec
         ) as mock_get_spec:
@@ -74,9 +71,10 @@ class TestOGMFetch:
     def test_fetch_without_property_chains(self, ogm_with_mock_db, mock_db):
         """Test fetch with no property_chains specified."""
         # Setup
-        mock_db.triples_get.return_value = [(INSTANCE_IRI, RDF_TYPE, TRANSFER_UNIT_IRI)]
+        mock_db.owl_get_classes_of_individual.return_value = [TRANSFER_UNIT_IRI]
 
         mock_class_spec = Mock(spec=ClassSpec)
+        mock_class_spec.properties = {}
         with patch.object(
             ogm_with_mock_db, "get_class_spec", return_value=mock_class_spec
         ) as mock_get_spec:
@@ -87,58 +85,3 @@ class TestOGMFetch:
             mock_get_spec.assert_called_once_with(
                 class_iri=TRANSFER_UNIT_IRI, property_chains=None
             )
-
-
-class TestInstanceTypeResolution:
-    """Test _resolve_instance_type() method."""
-
-    def test_resolve_single_type(self, ogm_with_mock_db, mock_db):
-        """Test resolving instance with single rdf:type."""
-        # Setup
-        mock_db.triples_get.return_value = [(INSTANCE_IRI, RDF_TYPE, TRANSFER_UNIT_IRI)]
-
-        # Execute
-        resolved_type = ogm_with_mock_db._resolve_instance_type(INSTANCE_IRI)
-
-        # Assert
-        assert resolved_type == TRANSFER_UNIT_IRI
-
-    def test_resolve_multiple_types_uses_first(self, ogm_with_mock_db, mock_db, caplog):
-        """Test that multiple rdf:types logs warning and uses first."""
-        # Setup
-        type1 = TRANSFER_UNIT_IRI
-        type2 = IRI("https://example.org/SomeOtherClass")
-        mock_db.triples_get.return_value = [
-            (INSTANCE_IRI, RDF_TYPE, type1),
-            (INSTANCE_IRI, RDF_TYPE, type2),
-        ]
-
-        # Execute
-        with caplog.at_level("WARNING"):
-            resolved_type = ogm_with_mock_db._resolve_instance_type(INSTANCE_IRI)
-
-        # Assert
-        assert resolved_type == type1
-        assert "Multiple rdf:types" in caplog.text
-
-    def test_resolve_no_type_raises_error(self, ogm_with_mock_db, mock_db):
-        """Test that missing rdf:type raises ValueError."""
-        # Setup: No types returned
-        mock_db.triples_get.return_value = []
-
-        # Execute & Assert
-        with pytest.raises(ValueError, match="No rdf:type found"):
-            ogm_with_mock_db._resolve_instance_type(INSTANCE_IRI)
-
-    def test_resolve_queries_with_include_implicit(self, ogm_with_mock_db, mock_db):
-        """Test that type resolution includes implicit triples."""
-        # Setup
-        mock_db.triples_get.return_value = [(INSTANCE_IRI, RDF_TYPE, TRANSFER_UNIT_IRI)]
-
-        # Execute
-        ogm_with_mock_db._resolve_instance_type(INSTANCE_IRI)
-
-        # Assert
-        mock_db.triples_get.assert_called_once_with(
-            sub=INSTANCE_IRI, pred=RDF_TYPE, include_implicit=True
-        )

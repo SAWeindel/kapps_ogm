@@ -9,12 +9,13 @@ Tests Phase 2.1: Node Error Conditions
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 from pydantic import BaseModel
 
 from graph_db_interface import IRI
 from circular_factory_ogm.node.core import Node
 from circular_factory_ogm.mapping.class_spec import ClassSpec
+from circular_factory_ogm.ogm import OGM
 
 from .conftest import INSTANCE_IRI
 
@@ -22,7 +23,7 @@ from .conftest import INSTANCE_IRI
 class TestNodeToTriplesErrors:
     """Test error conditions in to_triples() method."""
 
-    def test_to_triples_without_instance_raises(self, simple_class_spec):
+    def test_to_triples_without_instance_raises(self, simple_class_spec: Mock):
         """Test that to_triples() raises RuntimeError when node not materialized."""
         # Setup: Node without instance
         node = Node(
@@ -36,7 +37,7 @@ class TestNodeToTriplesErrors:
         with pytest.raises(RuntimeError, match="Node must be materialized"):
             node.to_triples()
 
-    def test_to_triples_without_iri_raises(self, simple_class_spec):
+    def test_to_triples_without_iri_raises(self, simple_class_spec: Mock):
         """Test that to_triples() raises RuntimeError when node has no IRI."""
         # Setup: Node with instance but no IRI
         mock_instance = Mock(spec=BaseModel)
@@ -74,7 +75,7 @@ class TestNodeToTriplesErrors:
         with pytest.raises(RuntimeError, match="ClassSpec or _iri_fields"):
             node.to_triples()
 
-    def test_to_triples_handles_none_property_values(self, simple_class_spec):
+    def test_to_triples_handles_none_property_values(self, simple_class_spec: Mock):
         """Test that to_triples() skips None/null property values."""
         # Setup: Instance with None values
         mock_instance = Mock(spec=BaseModel)
@@ -130,7 +131,7 @@ class TestNodeToTriplesErrors:
 class TestNodeToJSONLDErrors:
     """Test error conditions in to_json_ld() method."""
 
-    def test_to_json_ld_with_empty_triples(self, simple_class_spec):
+    def test_to_json_ld_with_empty_triples(self, simple_class_spec: Mock):
         """Test to_json_ld() with minimal/empty triple set."""
         # Setup: Node with instance that has no properties
         mock_instance = Mock(spec=BaseModel)
@@ -151,7 +152,7 @@ class TestNodeToJSONLDErrors:
         assert "@graph" in json_ld
         assert isinstance(json_ld["@graph"], list)
 
-    def test_to_json_ld_without_context(self, simple_class_spec):
+    def test_to_json_ld_without_context(self, simple_class_spec: Mock):
         """Test to_json_ld() without context uses full URIs."""
         # Setup
         mock_instance = Mock(spec=BaseModel)
@@ -174,7 +175,7 @@ class TestNodeToJSONLDErrors:
         assert "@graph" in json_ld
         assert len(json_ld["@graph"]) > 0
 
-    def test_to_json_ld_with_custom_context(self, simple_class_spec):
+    def test_to_json_ld_with_custom_context(self, simple_class_spec: Mock):
         """Test to_json_ld() with custom context."""
         # Setup
         mock_instance = Mock(spec=BaseModel)
@@ -199,7 +200,7 @@ class TestNodeToJSONLDErrors:
 class TestNodeStateManagement:
     """Test Node state and lifecycle edge cases."""
 
-    def test_node_with_all_none_values(self, simple_class_spec):
+    def test_node_with_all_none_values(self, simple_class_spec: Mock):
         """Test node handles case where all properties are None."""
         # Setup
         node = Node(
@@ -216,7 +217,7 @@ class TestNodeStateManagement:
         assert node.instance is None
         assert node.class_spec == simple_class_spec
 
-    def test_node_repr_with_long_iri(self, simple_class_spec):
+    def test_node_repr_with_long_iri(self, simple_class_spec: Mock):
         """Test __repr__ handles very long IRIs."""
         # Setup: Very long IRI
         long_iri = IRI("https://example.org/" + "a" * 200)
@@ -234,17 +235,17 @@ class TestNodeStateManagement:
         assert "Node<ref" in repr_str
 
     def test_node_with_circular_reference_in_data(
-        self, simple_class_spec, ogm_with_mock_db
+        self, simple_class_spec: Mock, ogm: OGM
     ):
         """Test node handles circular references in data dict."""
-        # Setup: Circular data structure
-        circular_data = {"property": None}
-        circular_data["property"] = circular_data  # Self-reference
+        # Setup: Circular data structure: Self-reference
+        circular_data = {}
+        circular_data[IRI("https://example.org/property")] = [circular_data]
 
         node = Node(
             id=INSTANCE_IRI,
             class_spec=simple_class_spec,
-            ogm=ogm_with_mock_db,
+            ogm=ogm,
         )
 
         # Should be able to assign circular data without error
@@ -252,6 +253,24 @@ class TestNodeStateManagement:
 
         # Assert: Data assigned
         assert node.data is circular_data
+
+        # Multi-hop circular reference
+        data_node_1 = {}
+        data_node_2 = {}
+        data_node_1[IRI("https://example.org/property_1_to_2")] = [data_node_2]
+        data_node_2[IRI("https://example.org/property_2_to_1")] = [data_node_1]
+
+        node_1 = Node(
+            id=INSTANCE_IRI,
+            class_spec=simple_class_spec,
+            ogm=ogm,
+        )
+
+        # Should be able to assign circular data without error
+        node_1.data = data_node_1
+
+        # Assert: Data assigned
+        assert node_1.data is data_node_1
 
     def test_node_equality_comparison(self, simple_class_spec):
         """Test node equality based on IRI."""

@@ -34,8 +34,8 @@ class OGM:
             loader: LoaderStrategy that takes an IRI and returns property chains for selective instance loading. if not specified, property chains need to be provided at fetch/creation time.
         """
         self.db = db
-        self._loader = loader
-        self._naming_schema = naming_schema
+        self.loader = loader
+        self.naming_schema = naming_schema
         self.logger = logger or logging.getLogger("cf_ogm")
         self.logger.setLevel(logging.DEBUG)
 
@@ -57,7 +57,7 @@ class OGM:
         property_chains = (
             property_chains
             if property_chains is not None
-            else self._loader.expand(class_iri) if self._loader else None
+            else self.loader.expand(class_iri) if self.loader else None
         )
         self.logger.debug(
             "Resolving ClassSpec for %s (chain=%s)",
@@ -105,7 +105,7 @@ class OGM:
         property_chains = (
             property_chains
             if property_chains is not None
-            else self._loader.expand(class_iri) if self._loader else None
+            else self.loader.expand(class_iri) if self.loader else None
         )
 
         class_spec = self.get_class_spec(
@@ -149,7 +149,7 @@ class OGM:
         property_chains = (
             property_chains
             if property_chains is not None
-            else self._loader.expand(class_iri) if self._loader else None
+            else self.loader.expand(class_iri) if self.loader else None
         )
         return _create_blank_instance(
             ogm=self,
@@ -163,7 +163,7 @@ class OGM:
             raise ValueError(f"Node {node} has no ClassSpec, cannot assign id.")
         model_iri = getattr(node.class_spec, "iri", None)
         if model_iri:
-            instance_id = self.db.new_iri(base=model_iri, schema=self._naming_schema)
+            instance_id = self.db.new_iri(base=model_iri, schema=self.naming_schema)
         else:
             instance_id = self.db.new_blank_id()
         node.id = instance_id
@@ -273,8 +273,8 @@ class OGM:
         Returns:
             Node representing the fetched instance
         """
-        if property_chains is None and self._loader is not None:
-            property_chains = self._loader.expand(instance_iri)
+        if property_chains is None and self.loader is not None:
+            property_chains = self.loader.expand(instance_iri)
 
         if class_spec is None:
             class_iri = self.db.owl_get_classes_of_individual(instance_iri)[0]

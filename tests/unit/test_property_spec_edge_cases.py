@@ -9,13 +9,12 @@ Tests Phase 2.3: PropertySpec Edge Cases
 """
 
 import pytest
-from unittest.mock import Mock, patch
-from typing import Any
+from unittest.mock import Mock
 
 from graph_db_interface import IRI
-from circular_factory_ogm.ogm import OGM
 from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from circular_factory_ogm.mapping.class_spec import ClassSpec
+from circular_factory_ogm.ogm import OGM
 
 
 class TestPropertySpecCardinality:
@@ -224,70 +223,69 @@ class TestPropertySpecConstraints:
 class TestPropertySpecification:
     """Test PropertySpec.specify_* class methods."""
 
-    def test_specify_literal_property_with_no_range_raises(
-        self, ogm_with_mock_db, mock_db
-    ):
+    def test_specify_literal_property_with_no_range_raises(self, ogm: OGM):
         """Test that literal property without rdfs:range raises error."""
-        # Setup: No range defined
-        mock_db.triples_get.return_value = []
-
+        # setup
         prop_iri = IRI("https://example.org/noRangeProp")
+        ogm.db.triples_add(
+            [
+                (prop_iri, IRI("rdf:type"), IRI("owl:DatatypeProperty")),
+            ]
+        )
 
         # Execute & Assert
         with pytest.raises(ValueError, match="has no rdfs:range defined"):
-            PropertySpec._specify_literal_property(
-                ogm=ogm_with_mock_db, prop_iri=prop_iri
-            )
+            PropertySpec.specify(prop_iri=prop_iri, ogm=ogm)
 
-    def test_specify_literal_property_with_multiple_ranges_raises(
-        self, ogm_with_mock_db, mock_db
-    ):
+    def test_specify_literal_property_with_multiple_ranges_raises(self, ogm: OGM):
         """Test that literal property with multiple rdfs:range raises error."""
         # Setup: Multiple ranges
         prop_iri = IRI("https://example.org/multiRangeProp")
-        mock_db.triples_get.return_value = [
-            (prop_iri, IRI("rdfs:range"), IRI("xsd:string")),
-            (prop_iri, IRI("rdfs:range"), IRI("xsd:int")),
-        ]
+        ogm.db.triples_add(
+            [
+                (prop_iri, IRI("rdf:type"), IRI("owl:DatatypeProperty")),
+                (prop_iri, IRI("rdfs:range"), IRI("xsd:string")),
+                (prop_iri, IRI("rdfs:range"), IRI("xsd:int")),
+            ]
+        )
 
         # Execute & Assert
         with pytest.raises(ValueError, match="has multiple rdfs:range defined"):
-            PropertySpec._specify_literal_property(
-                ogm=ogm_with_mock_db, prop_iri=prop_iri
-            )
+            PropertySpec.specify(prop_iri=prop_iri, ogm=ogm)
 
-    def test_specify_class_property_creates_nested_class_spec(
-        self, ogm_with_mock_db, mock_db
-    ):
+    def test_specify_class_property_creates_nested_class_spec(self, ogm: OGM):
         """Test that class property creates nested ClassSpec."""
         # Setup
         prop_iri = IRI("https://example.org/objectProp")
         target_class = IRI("https://example.org/TargetClass")
-        mock_db.triples_get.return_value = [(prop_iri, IRI("rdfs:range"), target_class)]
+        ogm.db.triples_add(
+            [
+                (prop_iri, IRI("rdf:type"), IRI("owl:ObjectProperty")),
+                (prop_iri, IRI("rdfs:range"), target_class),
+            ]
+        )
 
         # Execute
-        prop_spec = PropertySpec._specify_class_property(
-            ogm=ogm_with_mock_db, prop_iri=prop_iri
-        )
+        prop_spec = PropertySpec.specify(prop_iri=prop_iri, ogm=ogm)
 
         # Assert
         assert prop_spec.value_kind is PropertyValueKind.OBJECT
         assert prop_spec.nested is not None
         assert prop_spec.nested.iri == target_class
 
-    def test_specify_class_property_with_no_range_raises(
-        self, ogm_with_mock_db, mock_db
-    ):
+    def test_specify_class_property_with_no_range_raises(self, ogm: OGM):
         """Test that class property without rdfs:range raises error."""
         # Setup
-        mock_db.triples_get.return_value = []
         prop_iri = IRI("https://example.org/noRangeProp")
+        ogm.db.triples_add(
+            [
+                (prop_iri, IRI("rdf:type"), IRI("owl:ObjectProperty")),
+            ]
+        )
 
         # Execute & Assert
         with pytest.raises(ValueError, match="has no rdfs:range defined"):
-            PropertySpec._specify_class_property(
-                ogm=ogm_with_mock_db, prop_iri=prop_iri
-            )
+            PropertySpec.specify(prop_iri=prop_iri, ogm=ogm)
 
 
 class TestPropertySpecSerialization:

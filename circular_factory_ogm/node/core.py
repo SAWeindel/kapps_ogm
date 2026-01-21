@@ -71,12 +71,10 @@ class Node:
         self.class_spec = class_spec
         self.ogm = ogm
 
-        self._data = None
         self.instance = instance
 
         # Set data through property to trigger sanitization
-        if data is not None:
-            self.data = data
+        self.data = data
 
     # -------------------------
     # Lifecycle helpers
@@ -107,19 +105,42 @@ class Node:
         return self._data
 
     @data.setter
-    def data(self, value: Dict[IRILike, List[Any]]) -> None:
+    def data(self, value: Optional[Dict[IRILike, List[Any]]]) -> None:
         """
         Set or update the raw data for this node.
 
         Args:
-            value (Dict): Raw instance data to set on the node.
+            value (Optional[Dict[IRILike, List[Any]]]): Raw instance data to set on the node.
         """
-        if value is None:
+        self._set_data_check_cyclic(value)
+
+    @classmethod
+    def from_sanitize_data(
+        cls,
+        ogm: OGM,
+        data: Dict[IRILike, List[Any]],
+        known_nodes: Optional[Dict[int, "Node"]] = None,
+    ) -> "Node":
+        node = cls(ogm=ogm)
+        node._set_data_check_cyclic(data, known_nodes=known_nodes)
+        return node
+
+    def _set_data_check_cyclic(
+        self,
+        data: Optional[Dict[IRILike, List[Any]]],
+        known_nodes: Optional[Dict[int, "Node"]] = None,
+    ) -> None:
+        if data is None:
             self._data = None
             return
 
+        if known_nodes is None:
+            known_nodes = {}
+        known_nodes[id(data)] = self
         # Sanitize data through the formatter
-        sanitized, node_id = sanitize_data(value, self.ogm)
+        sanitized, node_id = sanitize_data(
+            data=data, node=self, known_nodes=known_nodes
+        )
         self._data = sanitized
 
         # Update node ID if found in data

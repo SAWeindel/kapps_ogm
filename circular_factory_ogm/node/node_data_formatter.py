@@ -1,7 +1,7 @@
 """Data formatting and sanitization utilities for Node instances."""
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 import logging
 
 from graph_db_interface import IRI
@@ -14,7 +14,11 @@ logger = logging.getLogger("cf_node_formatter")
 logger.setLevel(logging.DEBUG)
 
 
-def sanitize_data(data: Dict, ogm: OGM) -> dict[IRI, List[Any]]:
+def sanitize_data(
+    data: Dict,
+    node: "Node",
+    known_nodes: Optional[Dict[int, "Node"]] = None,
+) -> dict[IRI, List[Any]]:
     """
     Recursively converts provided data dict into a unified format.
 
@@ -69,11 +73,18 @@ def sanitize_data(data: Dict, ogm: OGM) -> dict[IRI, List[Any]]:
                 # Already a Node, use as is
                 sanitized_data[property_iri].append(domain_instance)
             elif isinstance(domain_instance, dict):
-                # Convert dict to Node
-                node = Node(
-                    data=domain_instance,
-                    ogm=ogm,
-                )
+                dict_id = id(domain_instance)
+                if known_nodes is not None and dict_id in known_nodes:
+                    # Reuse existing Node to avoid cycles
+                    node = known_nodes[dict_id]
+                else:
+                    # Convert dict to Node
+                    node = Node.from_sanitize_data(
+                        ogm=node.ogm,
+                        data=domain_instance,
+                        known_nodes=known_nodes,
+                    )
+
                 sanitized_data[property_iri].append(node)
             else:
                 sanitized_data[property_iri].append(domain_instance)

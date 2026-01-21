@@ -252,7 +252,7 @@ class TestNodeStateManagement:
         node.data = circular_data
 
         # Assert: Data assigned
-        assert node.data is circular_data
+        assert node.data == {IRI("https://example.org/property"): [node]}
 
         # Multi-hop circular reference
         data_node_1 = {}
@@ -269,8 +269,11 @@ class TestNodeStateManagement:
         # Should be able to assign circular data without error
         node_1.data = data_node_1
 
+        node_2 = node_1.data[IRI("https://example.org/property_1_to_2")][0]
+
         # Assert: Data assigned
-        assert node_1.data is data_node_1
+        assert isinstance(node_2, Node)
+        assert node_2.data == {IRI("https://example.org/property_2_to_1"): [node_1]}
 
     def test_node_equality_comparison(self, simple_class_spec):
         """Test node equality based on IRI."""

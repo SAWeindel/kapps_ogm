@@ -1,8 +1,8 @@
 {
-  "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit-4de5d5e4-d359-4b7e-b605-b1b964e9f314",
+  "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit-fc00e477-9f69-485f-9f2d-e5451ff6425e",
   "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt": [
     {
-      "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#ConveyorBelt-8f8e5155-5655-4680-b3e4-86dc99eb763d",
+      "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#ConveyorBelt-1ed6570f-4537-49d2-a4b1-21238866cd1f",
       "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition": [
         {
           "https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue": [
@@ -28,7 +28,7 @@
   ],
   "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier": [
     {
-      "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#LightBarrier-bca46f6b-bfd0-47c8-896a-8db20b9a442c",
+      "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnit#LightBarrier-bdb1e71c-ffca-4114-8c86-3bc674cb6eaa",
       "https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied": [
         {
           "https://www.sfb1574.kit.edu/ontologies/CrcInterfaces#hasValue": [

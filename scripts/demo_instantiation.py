@@ -82,8 +82,7 @@ def main():
     )
     db = GraphDB(credentials=credentials)
     db.logger.setLevel(logging.ERROR)
-    # Refactored OGM: pass loader only
-    ogm = OGM(db=db, loader=loader_eh)
+    ogm = OGM(db=db)
 
     # Specify TransferUnit with property chains - should be fully hydrated
     class_spec = ClassSpec.specify(

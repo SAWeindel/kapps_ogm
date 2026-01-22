@@ -245,11 +245,11 @@ class ClassSpec:
 
                 prop_spec = class_spec.properties[next_property]
 
-                if prop_spec.value_kind != PropertyValueKind.OBJECT:
+                if prop_spec.value_kind == PropertyValueKind.COMPLEX:
                     logger.warning(
                         f"Property {class_spec.iri} -> {next_property} of type '{prop_spec.value_kind.name}'."
-                        f"This property is always specified, only type 'object'"
-                        "should be used in property chains. Skipping."
+                        f"This property is always specified, since it poinbts towards a blank node, and therefore could otherwise not be expanded afterwards."
+                        
                     )
                     continue
 

@@ -201,7 +201,9 @@ class PropertySpec:
     def specify(
         cls,
         prop_iri: IRI,
+        property_chains: list[list[IRI]],
         ogm: "OGM",
+        explore_class_properties: bool,
     ) -> PropertySpec:
         # Categorize the property regarding its type and characteristics
         query_result = ogm.db.triples_get(
@@ -235,9 +237,21 @@ class PropertySpec:
 
         prop_range = query_result[0][2]
         if isinstance(prop_range, type):
+            if property_chains and any(
+                len(property_chain) > 0 for property_chain in property_chains
+            ):
+                raise ValueError(
+                    f"Property {prop_iri} cannot be part of a property chain as it has a literal range {prop_range}"
+                )
             property_spec = cls._specify_literal_property(prop_iri, prop_range)
         elif isinstance(prop_range, IRI):
-            property_spec = cls._specify_class_property(prop_iri, prop_range)
+            property_spec = cls._specify_class_property(
+                prop_iri,
+                prop_range,
+                property_chains,
+                ogm,
+                explore_class_properties,
+            )
         else:
             # Is blank node: Check if valid structure for complex datatype
             query_is_complex_type = f"""
@@ -266,7 +280,13 @@ class PropertySpec:
                 }}
             """
             if ogm.db.query(query_is_complex_type).get("boolean", False):
-                property_spec = cls._specify_complex_property(ogm, prop_iri)
+                if property_chains and any(
+                    len(property_chain) > 0 for property_chain in property_chains
+                ):
+                    raise ValueError(
+                        f"Property {prop_iri} cannot be part of a property chain as it has a literal range {prop_range}"
+                    )
+                property_spec = cls._specify_complex_property(prop_iri, ogm)
             else:
                 raise ValueError(
                     f"Unknown property_type: {prop_range} for property {prop_iri}"
@@ -302,8 +322,21 @@ class PropertySpec:
         cls,
         prop_iri: IRI,
         range_iri: IRI,
+        property_chains: list[list[IRI]],
+        ogm: "OGM",
+        explore_class_properties: bool,
     ) -> PropertySpec:
         from .class_spec import ClassSpec
+
+        if not property_chains or len(property_chains) == 0:
+            nested_class_spec = ClassSpec(iri=range_iri)
+        else:
+            nested_class_spec = ClassSpec.specify(
+                ogm=ogm,
+                class_iri=range_iri,
+                property_chains=property_chains,
+                explore_class_properties=explore_class_properties,
+            )
 
         property_spec = cls(
             iri=prop_iri,
@@ -311,15 +344,16 @@ class PropertySpec:
             python_range_type=None,  # Will be another ClassSpec
             max_count=None,
             min_count=None,
-            nested=ClassSpec(iri=range_iri),
+            nested=nested_class_spec,
         )
+
         return property_spec
 
     @classmethod
     def _specify_complex_property(
         cls,
-        ogm: "OGM",
         prop_iri: IRI,
+        ogm: "OGM",
     ) -> PropertySpec:
         """
         Processes a complex OWL property and returns a PropertySpec with a nested ClassSpec

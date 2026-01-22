@@ -44,9 +44,11 @@ class OGMEncoder(json.JSONEncoder):
         from ..node import Node
 
         if isinstance(obj, Node):
-            return _unline(obj.data)
+            return _unline(obj)
         if isinstance(obj, IRI):
             return str(obj)
+        if isinstance(obj, set):
+            return list(obj)
         if hasattr(obj, "model_dump"):
             return _unline(obj.model_dump())
         if hasattr(obj, "dict"):

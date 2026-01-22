@@ -7,10 +7,10 @@ if TYPE_CHECKING:
 
 def format_triples_turtle(triples) -> str:
     """Format a set of RDF triples in a Turtle-like structure.
-    
+
     Args:
         triples: Set or list of (subject, predicate, object) tuples.
-        
+
     Returns:
         str: Formatted triples in Turtle-like syntax.
     """
@@ -42,18 +42,18 @@ def format_triples_turtle(triples) -> str:
 
 def format_node_data(node_data: Dict[Any, List[Any]]) -> Dict[str, Any]:
     """Convert Node.data with IRI keys and Node values to JSON-serializable format.
-    
+
     Recursively converts IRI and BNode objects to strings, enabling JSON serialization.
-    
+
     Args:
         node_data: Node.data dictionary with IRI keys and mixed values.
-        
+
     Returns:
         Dict with all IRI/BNode objects converted to strings.
     """
     from graph_db_interface import IRI
     from rdflib import BNode
-    
+
     def convert_to_serializable(obj):
         """Convert IRI and other non-serializable objects to strings."""
         if isinstance(obj, (IRI, BNode)):
@@ -66,18 +66,18 @@ def format_node_data(node_data: Dict[Any, List[Any]]) -> Dict[str, Any]:
         elif isinstance(obj, list):
             return [convert_to_serializable(item) for item in obj]
         return obj
-    
+
     return convert_to_serializable(node_data)
 
 
 def format_property_spec(prop_spec: "PropertySpec", indent: int = 0) -> str:
     """
     Recursively converts a PropertySpec (with nested ClassSpec) into a formatted string.
-    
+
     Args:
         prop_spec: PropertySpec instance to format.
         indent: Indentation level for nested structures.
-        
+
     Returns:
         str: Formatted PropertySpec representation.
     """
@@ -116,11 +116,11 @@ def format_property_spec(prop_spec: "PropertySpec", indent: int = 0) -> str:
 def format_class_spec(class_spec: "ClassSpec", indent: int = 0) -> str:
     """
     Recursively converts a ClassSpec (with nested PropertySpec objects) into a formatted string.
-    
+
     Args:
         class_spec: ClassSpec instance to format.
         indent: Indentation level for nested structures.
-        
+
     Returns:
         str: Formatted ClassSpec representation.
     """

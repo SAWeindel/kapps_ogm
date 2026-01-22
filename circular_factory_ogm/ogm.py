@@ -48,6 +48,7 @@ class OGM:
         *,
         class_iri: IRI,
         property_chains: Optional[list[list[IRI]]] = None,
+        explore_class_properties: bool = True,
     ) -> ClassSpec:
         """
         Resolve a ClassSpec for a given class IRI.
@@ -60,15 +61,17 @@ class OGM:
             else self.loader.expand(class_iri) if self.loader else None
         )
         self.logger.debug(
-            "Resolving ClassSpec for %s (chain=%s)",
+            "Resolving ClassSpec for %s (chain=%s, explore_class_properties=%s)",
             class_iri,
             property_chains,
+            explore_class_properties,
         )
 
         spec = ClassSpec.specify(
             class_iri=class_iri,
             ogm=self,
             property_chains=property_chains,
+            explore_class_properties=explore_class_properties,
         )
         return spec
 
@@ -156,6 +159,7 @@ class OGM:
             instance_iri=instance_iri or IRI("urn:uuid:generated-blank-instance"),
             class_iri=class_iri,
             property_chains=property_chains,
+            explore_class_properties=False,
         )
 
     def _assign_id(self, node: Node) -> None:
@@ -172,86 +176,94 @@ class OGM:
     # Fetching existing instances (Read)
     # ------------------------------------------------------------------
 
-    def _get_property_data(
+    def _fetch_literal_property(
         self,
-        property_spec: PropertySpec,
         instance_iri: IRI,
-        property_chain: Optional[list[IRI]] = None,
-        materialize: bool = False,
-    ) -> Optional[list[Any]]:
+        property_spec: PropertySpec,
+    ) -> list[Any]:
+        triples = self.db.triples_get(sub=instance_iri, pred=property_spec.iri)
+        property_data = [r[2] for r in triples]
+        return property_data
+
+    def _fetch_complex_property(
+        self,
+        instance_iri: IRI,
+        property_iri: IRI,
+    ) -> list[dict[IRI, list[Any]]]:
         """
-        Helper method to fetch property data for a given property spec and instance IRI.
+        Helper function to fetch complex property data for a given instance and property spec.
+        All properties attached to the complex class are fetched.
         """
-        data = []
+        # Re-query anonymous node, this time including properties
+        query = f"""
+                SELECT ?bnode ?property ?value
+                FROM <http://www.ontotext.com/explicit>
+                WHERE {{
+                    <{instance_iri}> <{property_iri}> ?bnode .
+                    ?bnode ?property ?value .
+                }}
+            """
+        query_result = (
+            self.db.query(query, convert_bindings=True)
+            .get("results", {})
+            .get("bindings", [])
+        )
+        if not query_result:
+            return []
 
-        query_result = self.db.triples_get(sub=instance_iri, pred=property_spec.iri)
-        if query_result is None:
-            return None
-        else:
-            if (
-                property_spec.value_kind is PropertyValueKind.LITERAL
-            ):  # this is a datatype property without further chaining => cannot be expanded
-                data.extend([obj for subj, pred, obj in query_result])
+        property_data_dict = {}
+        for binding in query_result:
+            bnode = str(binding["bnode"])
+            prop_iri = IRI(str(binding["property"]))
+            value = binding["value"]
 
-            elif property_spec.value_kind is PropertyValueKind.OBJECT:
-                # if there is a property chain given, and we are at the first element of it, we need to expand further
-                if property_chain is not None:
-                    if property_chain[0] == property_spec.iri:
-                        # we remove the first element and pass the rest down, call fetch recursively
-                        remaining_chain = property_chain[1:]
-                        for subj, pred, obj in query_result:
-                            nested_instance = self.fetch(
-                                instance_iri=obj,
-                                class_spec=property_spec.nested,
-                                property_chains=(
-                                    [remaining_chain]
-                                    if len(remaining_chain) > 0
-                                    else None
-                                ),
-                                as_reference=False,
-                                materialize=materialize,
-                            )
-                            data.append(nested_instance)
-                else:  # no property chain given, we treat the object just as reference
-                    nested_instance = self.fetch(
-                        instance_iri=obj,
-                        class_spec=property_spec.nested,
-                        as_reference=True,
-                    )
-                    data.append(nested_instance)
+            property_data_dict.setdefault(bnode, {})
+            property_data_dict[bnode].setdefault(prop_iri, [])
+            property_data_dict[bnode][prop_iri].append(value)
 
-            elif (
-                property_spec.value_kind is PropertyValueKind.COMPLEX
-            ):  # this is a property that has a range of complex type/bnode (ie due to union or intersection)
+        # [{property_iri: [value1, value2, ...], ...}, ...]
+        property_data: list[dict[IRI, list[Any]]] = list(property_data_dict.values())
+        return property_data
 
-                nested_dict = {}
-                query = f"""
-                    SELECT ?property ?value
-                    FROM <http://www.ontotext.com/explicit>
-                    WHERE {{
-                        <{instance_iri}> <{property_spec.iri}> ?intermediate .
-                        ?intermediate ?property ?value .
-                    }}
-                """
-                nested_query_result = (
-                    self.db.query(query, convert_bindings=True)
-                    .get("results", {})
-                    .get("bindings", [])
-                )
-                for binding in nested_query_result:
-                    prop_iri = binding["property"]
-                    value = binding["value"]
-                    if prop_iri not in nested_dict:
-                        nested_dict[prop_iri] = []
-                    nested_dict[prop_iri].append(value)
-                data.append(nested_dict)
+    def _fetch_object_property(
+        self,
+        instance_iri: IRI,
+        property_spec: PropertySpec,
+        property_chains: Optional[list[list[IRI]]],
+        materialize: bool,
+    ) -> list[Node]:
+        # Query all instances of the property
+        triples = self.db.triples_get(sub=instance_iri, pred=property_spec.iri)
+        if not triples:
+            return []
+        nested_instance_iris = [r[2] for r in triples]
 
-            else:
-                raise ValueError(
-                    f"Unknown value_kind {property_spec.value_kind} for property {property_spec.iri}"
-                )
+        # if there are property chains in which we are at the first element, we need to pass them down
+        # pass only chains that are non-empty after the first element is removed
+        # if no chain contains us, we are fetching as reference only
+        containing_chains = [
+            chain
+            for chain in property_chains or []
+            if chain and chain[0] == property_spec.iri
+        ]
+        as_reference = len(containing_chains) == 0
+        remaining_chains = [
+            chain[1:] for chain in containing_chains if len(chain) > 1
+        ] or None
 
-            return data
+        property_data = []
+
+        for nested_instance_iri in nested_instance_iris:
+            nested_instance = self.fetch(
+                instance_iri=nested_instance_iri,
+                class_spec=property_spec.nested,
+                property_chains=remaining_chains,
+                as_reference=as_reference,
+                materialize=materialize,
+            )
+            property_data.append(nested_instance)
+
+        return property_data
 
     def fetch(
         self,
@@ -267,8 +279,11 @@ class OGM:
 
         Args:
             instance_iri: IRI of the instance to fetch
+            class_spec: Optional ClassSpec to use for fetching. If not provided, it will be resolved automatically
             property_chains: Optional property chains for selective hydration
             as_reference: If True, fetch only the IRI without loading properties
+            materialize: If True, materialize the Node's data according to the ClassSpec.
+                Ignored if as_reference is True.
 
         Returns:
             Node representing the fetched instance
@@ -281,31 +296,40 @@ class OGM:
             class_spec = self.get_class_spec(
                 class_iri=class_iri,
                 property_chains=property_chains,
+                explore_class_properties=False,
             )
 
         data = {}
-        data["id"] = instance_iri  # every node must have an id at minimum
-
         if not as_reference:
-            # Full fetch according to class spec (already filtered by property chains)
-            for prop, prop_spec in class_spec.properties.items():
-                if property_chains is not None and len(property_chains) > 0:
-                    for chain in property_chains:
-                        if len(chain) > 0 and chain[0] == prop_spec.iri:
-                            # pass the rest of the chain for nested fetching
-                            data[prop] = self._get_property_data(
-                                prop_spec,
-                                instance_iri=instance_iri,
-                                property_chain=chain,
-                                materialize=materialize,
-                            )
-                else:
-                    data[prop] = self._get_property_data(
-                        prop_spec, instance_iri=instance_iri, materialize=materialize
-                    )
-        else:
-            # As reference: keep only the id
-            pass
+            # Full fetch according to class spec and property chains
+            for prop, property_spec in class_spec.properties.items():
+                match property_spec.value_kind:
+                    case PropertyValueKind.LITERAL:
+                        # Fetch literal values directly
+                        property_data = self._fetch_literal_property(
+                            instance_iri=instance_iri,
+                            property_spec=property_spec,
+                        )
+                    case PropertyValueKind.COMPLEX:
+                        property_data = self._fetch_complex_property(
+                            instance_iri=instance_iri,
+                            property_iri=property_spec.iri,
+                        )
+                    case PropertyValueKind.OBJECT:
+                        property_data = self._fetch_object_property(
+                            instance_iri=instance_iri,
+                            property_spec=property_spec,
+                            property_chains=property_chains,
+                            materialize=materialize,
+                        )
+                    case _:
+                        raise ValueError(
+                            f"Unknown value_kind {property_spec.value_kind} for property {property_spec.iri}"
+                        )
+
+                # Ignore if none found
+                if property_data:
+                    data[prop] = property_data
 
         node = Node(
             id=instance_iri,
@@ -315,8 +339,9 @@ class OGM:
             ogm=self,
         )
 
-        if materialize:
+        if not as_reference and materialize:
             node.materialize()
+
         return node
 
     # ------------------------------------------------------------------

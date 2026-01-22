@@ -235,7 +235,12 @@ class TestPropertySpecification:
 
         # Execute & Assert
         with pytest.raises(ValueError, match="has no rdfs:range defined"):
-            PropertySpec.specify(prop_iri=prop_iri, ogm=ogm)
+            PropertySpec.specify(
+                prop_iri=prop_iri,
+                ogm=ogm,
+                property_chains=[],
+                explore_class_properties=True,
+            )
 
     def test_specify_literal_property_with_multiple_ranges_raises(self, ogm: OGM):
         """Test that literal property with multiple rdfs:range raises error."""
@@ -251,7 +256,12 @@ class TestPropertySpecification:
 
         # Execute & Assert
         with pytest.raises(ValueError, match="has multiple rdfs:range defined"):
-            PropertySpec.specify(prop_iri=prop_iri, ogm=ogm)
+            PropertySpec.specify(
+                prop_iri=prop_iri,
+                ogm=ogm,
+                property_chains=[],
+                explore_class_properties=True,
+            )
 
     def test_specify_class_property_creates_nested_class_spec(self, ogm: OGM):
         """Test that class property creates nested ClassSpec."""
@@ -266,7 +276,12 @@ class TestPropertySpecification:
         )
 
         # Execute
-        prop_spec = PropertySpec.specify(prop_iri=prop_iri, ogm=ogm)
+        prop_spec = PropertySpec.specify(
+            prop_iri=prop_iri,
+            ogm=ogm,
+            property_chains=[],
+            explore_class_properties=True,
+        )
 
         # Assert
         assert prop_spec.value_kind is PropertyValueKind.OBJECT
@@ -285,7 +300,12 @@ class TestPropertySpecification:
 
         # Execute & Assert
         with pytest.raises(ValueError, match="has no rdfs:range defined"):
-            PropertySpec.specify(prop_iri=prop_iri, ogm=ogm)
+            PropertySpec.specify(
+                prop_iri=prop_iri,
+                ogm=ogm,
+                property_chains=[],
+                explore_class_properties=True,
+            )
 
 
 class TestPropertySpecSerialization:

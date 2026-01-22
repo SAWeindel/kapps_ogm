@@ -86,7 +86,10 @@ def main():
 
     # Specify TransferUnit with property chains - should be fully hydrated
     class_spec = ClassSpec.specify(
-        class_iri=NODE_ID, ogm=ogm, property_chains=property_chains
+        class_iri=NODE_ID,
+        ogm=ogm,
+        property_chains=property_chains,
+        explore_class_properties=True,
     )
     # print("TransferUnit ClassSpec (fully hydrated):")
     # print(class_spec.to_string())

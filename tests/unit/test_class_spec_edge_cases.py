@@ -69,7 +69,11 @@ class TestClassSpecValidation:
 
         # Execute & Assert
         with pytest.raises(ValueError, match="is not an OWL/RDFS Class"):
-            ClassSpec.specify(ogm=ogm_with_mock_db, class_iri=non_class_iri)
+            ClassSpec.specify(
+                ogm=ogm_with_mock_db,
+                class_iri=non_class_iri,
+                explore_class_properties=True,
+            )
 
 
 class TestClassSpecSerialization:

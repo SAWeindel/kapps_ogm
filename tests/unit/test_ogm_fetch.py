@@ -65,7 +65,9 @@ class TestOGMFetch:
 
             # Assert: get_class_spec was called with property_chains
             mock_get_spec.assert_called_once_with(
-                class_iri=TRANSFER_UNIT_IRI, property_chains=PROPERTY_CHAINS
+                class_iri=TRANSFER_UNIT_IRI,
+                property_chains=PROPERTY_CHAINS,
+                explore_class_properties=False,
             )
 
     def test_fetch_without_property_chains(self, ogm_with_mock_db, mock_db):
@@ -83,5 +85,7 @@ class TestOGMFetch:
 
             # Assert: get_class_spec was called with None for property_chains
             mock_get_spec.assert_called_once_with(
-                class_iri=TRANSFER_UNIT_IRI, property_chains=None
+                class_iri=TRANSFER_UNIT_IRI,
+                property_chains=None,
+                explore_class_properties=False,
             )

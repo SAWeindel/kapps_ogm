@@ -42,7 +42,11 @@ class ClassSpec:
         if not self.iri:
             raise ValueError("Cannot hydrate ClassSpec without an IRI.")
 
-        hydrated_spec = ClassSpec.specify(self.iri, ogm)
+        hydrated_spec = ClassSpec.specify(
+            self.iri,
+            ogm,
+            explore_class_properties=True,
+        )
         for key, value in asdict(hydrated_spec).items():
             setattr(self, key, value)
         return self
@@ -87,6 +91,7 @@ class ClassSpec:
         if ConfigDict is not None:
             model_cls.model_config = ConfigDict(extra="forbid")
         else:
+
             class Config(getattr(self.pydantic_base_model, "Config", object)):
                 extra = "forbid"
 
@@ -104,8 +109,11 @@ class ClassSpec:
 
     @classmethod
     def specify_from_instance(
+        cls,
+        model_cls: Type[pd.BaseModel],
         instance: pd.BaseModel,
         ogm: "OGM",
+        explore_class_properties: bool,
     ) -> ClassSpec:
         """
         create a ClassSpec for the given Pydantic model by analyzing its RDF data in the GraphDB via the OGM instance.
@@ -119,7 +127,11 @@ class ClassSpec:
         if iri is None:
             raise ValueError(f"Model {model_cls.__name__} has no associated IRI.")
 
-        return cls.specify(class_iri=iri, ogm=ogm)
+        return cls.specify(
+            class_iri=iri,
+            ogm=ogm,
+            explore_class_properties=explore_class_properties,
+        )
 
     @classmethod
     def specify(
@@ -127,6 +139,7 @@ class ClassSpec:
         class_iri: IRI,
         ogm: "OGM",
         property_chains: Optional[list[list[IRI]]] = None,
+        explore_class_properties: bool = True,
     ) -> ClassSpec:
         """
         create a ClassSpec for the given IRI by analyzing its RDF data in the GraphDB via the OGM instance.
@@ -195,7 +208,12 @@ class ClassSpec:
 
         # inherit properties from superclasses
         for sc in superclasses:
-            sc_spec = ClassSpec.specify(class_iri=sc, ogm=ogm)
+            # Always resolve superclasses fully
+            sc_spec = ClassSpec.specify(
+                class_iri=sc,
+                ogm=ogm,
+                explore_class_properties=True,
+            )
             duplicated_props = class_spec.properties.keys() & sc_spec.properties.keys()
             if duplicated_props:
                 logger.warning(
@@ -228,51 +246,37 @@ class ClassSpec:
             b["property"] for b in query_result.get("results", {}).get("bindings", [])
         )
 
+        remaining_chains_by_next = {}
+        for chain in property_chains or []:
+            if not chain:
+                continue  # skip empty chains
+            next_property = chain[0]
+            remaining_chains_by_next.setdefault(next_property, []).append(chain[1:])
+
         for prop in properties:
-            class_spec.properties[prop] = PropertySpec.specify(prop_iri=prop, ogm=ogm)
-
-        ### Follow property chains to hydrate connected ClassSpecs
-        if property_chains:
-            for property_chain in property_chains:
-                if len(property_chain) == 0:
-                    continue  # skip empty chains
-
-                next_property = property_chain[0]
-                if next_property not in class_spec.properties:
-                    raise ValueError(
-                        f"Property {class_spec.iri} -> {next_property} not found while processing property chain."
-                    )
-
-                prop_spec = class_spec.properties[next_property]
-
-                if prop_spec.value_kind == PropertyValueKind.COMPLEX:
-                    logger.warning(
-                        f"Property {class_spec.iri} -> {next_property} of type '{prop_spec.value_kind.name}'."
-                        f"This property is always specified, since it poinbts towards a blank node, and therefore could otherwise not be expanded afterwards."
-                        
-                    )
-                    continue
-
-                if prop_spec.nested is None:
-                    raise ValueError(
-                        f"Property {class_spec.iri} -> {next_property} has no nested ClassSpec (cannot continue property chain)."
-                    )
-
-                # Rebuild nested ClassSpec with remaining chain tail
-                remaining_chain = property_chain[1:]
+            if not (explore_class_properties or prop in remaining_chains_by_next):
                 logger.debug(
-                    f"'{class_spec.iri}' specifies '{prop_spec.nested.iri}' following chain {[i for i in property_chain]}"
+                    f"Skipping property {prop} of class {class_iri} as explore_class_properties is False and it is not in any property chain."
                 )
-                nested_spec = cls.specify(
-                    class_iri=prop_spec.nested.iri,
-                    ogm=ogm,
-                    property_chains=[remaining_chain] if remaining_chain else None,
-                )
+                continue  # skip properties if not explicitly requested
+            remaining_chains = remaining_chains_by_next.get(prop, [])
+            class_spec.properties[prop] = PropertySpec.specify(
+                prop_iri=prop,
+                property_chains=remaining_chains,
+                ogm=ogm,
+                explore_class_properties=explore_class_properties,
+            )
 
-                # Replace nested spec for this chain only
-                prop_spec.nested = nested_spec
+        missing_properties = set(remaining_chains_by_next.keys()) - set(
+            class_spec.properties.keys()
+        )
+        if missing_properties:
+            raise ValueError(
+                f"Properties {missing_properties} not found while processing property chains for class {class_spec.iri}."
+            )
 
-        # Mark as hydrated if it was fully specified
-        class_spec._hydrated = True
+        # Mark as hydrated if it was fully specified. If explore_class_properties is False,
+        # we cannot guarantee that all properties have been resolved.
+        class_spec._hydrated = explore_class_properties
 
         return class_spec

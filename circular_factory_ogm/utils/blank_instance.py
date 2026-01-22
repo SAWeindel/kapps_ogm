@@ -72,12 +72,14 @@ def _create_blank_instance(
     instance_iri: IRI,
     class_iri: IRI,
     property_chains: Optional[list[list[IRI]]] = None,
+    explore_class_properties: bool = False,
 ) -> pd.BaseModel:
     """Resolve schema (respecting property chains) and return a blank instance."""
     class_spec = ClassSpec.specify(
         class_iri=class_iri,
         ogm=ogm,
         property_chains=property_chains,
+        explore_class_properties=explore_class_properties,
     )
 
     return _blank_instance_from_class_spec(

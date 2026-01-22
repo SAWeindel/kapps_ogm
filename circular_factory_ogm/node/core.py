@@ -88,7 +88,7 @@ class Node:
     @property
     def has_data(self) -> bool:
         """Check if the node has loaded data."""
-        return self._data is not None
+        return bool(self._data)
 
     # -------------------------
     # Data access
@@ -238,7 +238,7 @@ class Node:
             return f"Node<instance {self.instance!r}>"
         return (
             f"Node<ref {self.id!r}, "
-            f"data={self.data is not None}, "
+            f"data={self.has_data}, "
             f"class_spec={self.class_spec is not None}>"
         )
 

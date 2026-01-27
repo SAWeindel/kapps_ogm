@@ -235,7 +235,7 @@ class PropertySpec:
                 f"Property {prop_iri} has multiple rdfs:range defined: {[triple[2] for triple in query_result]}"
             )
 
-        prop_range = query_result[0][2]
+        prop_range = query_result.pop()[2]
         if isinstance(prop_range, type):
             if property_chains and any(
                 len(property_chain) > 0 for property_chain in property_chains

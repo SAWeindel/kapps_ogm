@@ -174,7 +174,7 @@ class ClassSpec:
                 logger.warning(
                     f"Class {class_iri} has multiple rdfs:label values; using the first one."
                 )
-            class_spec.label = str(label_triples[0][2])
+            class_spec.label = str(label_triples.pop()[2])
 
         # Get the (first) comment of the class
         comment_triples = db.triples_get(
@@ -185,15 +185,13 @@ class ClassSpec:
                 logger.warning(
                     f"Class {class_iri} has multiple rdfs:comment values; using the first one."
                 )
-            class_spec.comment = str(comment_triples[0][2])
+            class_spec.comment = str(comment_triples.pop()[2])
 
         # Get the superclasses of the class
-        superclasses = [
-            triple[2]
-            for triple in db.triples_get(
-                sub=class_iri, pred="rdfs:subClassOf", include_implicit=True
-            )
-        ]
+        superclass_triples = db.triples_get(
+            sub=class_iri, pred="rdfs:subClassOf", include_implicit=True
+        )
+        superclasses = [triple[2] for triple in superclass_triples]
         if class_iri in superclasses:
             superclasses.remove(class_iri)
         else:

@@ -11,6 +11,7 @@ from pydantic import ConfigDict  # Pydantic v2
 from graph_db_interface import IRI
 from circular_factory_ogm.utils.pretty_print import format_class_spec
 from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
+from circular_factory_ogm.utils.class_scope import ClassScope
 
 if TYPE_CHECKING:
     from circular_factory_ogm.ogm import OGM
@@ -138,15 +139,17 @@ class ClassSpec:
         cls,
         class_iri: IRI,
         ogm: "OGM",
-        property_chains: Optional[list[list[IRI]]] = None,
+        class_scope: Optional[ClassScope] = None,
         explore_class_properties: bool = True,
     ) -> ClassSpec:
         """
-        create a ClassSpec for the given IRI by analyzing its RDF data in the GraphDB via the OGM instance.
+        create a ClassSpec for the given IRI by analyzing the ClassScope, its RDF data in the GraphDB via the OGM instance.
 
             Args:
                 iri: The IRI of the class to specify
                 ogm: The OGM instance with access to the GraphDB
+                class_scope: The ClassScope defining the class and property structure
+                explore_class_properties: Whether to include all immediate properties or not
             Returns:
                 A ClassSpec instance representing the class specification"""
         db = ogm.db
@@ -244,33 +247,23 @@ class ClassSpec:
             b["property"] for b in query_result.get("results", {}).get("bindings", [])
         )
 
-        remaining_chains_by_next = {}
-        for chain in property_chains or []:
-            if not chain:
-                continue  # skip empty chains
-            next_property = chain[0]
-            remaining_chains_by_next.setdefault(next_property, []).append(chain[1:])
-
         for prop in properties:
-            if not (explore_class_properties or prop in remaining_chains_by_next):
+            if not (explore_class_properties or prop in class_scope):
                 logger.debug(
-                    f"Skipping property {prop} of class {class_iri} as explore_class_properties is False and it is not in any property chain."
+                    f"Skipping property {prop} of class {class_iri} as explore_class_properties is False and it is not in the class scope."
                 )
                 continue  # skip properties if not explicitly requested
-            remaining_chains = remaining_chains_by_next.get(prop, [])
             class_spec.properties[prop] = PropertySpec.specify(
                 prop_iri=prop,
-                property_chains=remaining_chains,
+                nested_scope=class_scope.get(prop, None),
                 ogm=ogm,
                 explore_class_properties=explore_class_properties,
             )
 
-        missing_properties = set(remaining_chains_by_next.keys()) - set(
-            class_spec.properties.keys()
-        )
+        missing_properties = set(class_scope.keys()) - set(class_spec.properties.keys())
         if missing_properties:
             raise ValueError(
-                f"Properties {missing_properties} not found while processing property chains for class {class_spec.iri}."
+                f"Properties {missing_properties} specified in class scope, but not found as property of class {class_spec.iri}."
             )
 
         # Mark as hydrated if it was fully specified. If explore_class_properties is False,

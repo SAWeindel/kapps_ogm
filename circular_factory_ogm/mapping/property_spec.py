@@ -11,6 +11,7 @@ from circular_factory_ogm.utils.constants import (
     PROPERTY_TYPES,
     PROPERTY_CHARACTERISTICS,
 )
+from circular_factory_ogm.utils.class_scope import ClassScope
 
 if TYPE_CHECKING:
     from circular_factory_ogm.mapping.class_spec import ClassSpec
@@ -201,7 +202,7 @@ class PropertySpec:
     def specify(
         cls,
         prop_iri: IRI,
-        property_chains: list[list[IRI]],
+        nested_scope: Optional["ClassScope"],
         ogm: "OGM",
         explore_class_properties: bool,
     ) -> PropertySpec:
@@ -237,20 +238,21 @@ class PropertySpec:
 
         prop_range = query_result.pop()[2]
         if isinstance(prop_range, type):
-            if property_chains and any(
-                len(property_chain) > 0 for property_chain in property_chains
-            ):
+            if nested_scope:
                 raise ValueError(
                     f"Property {prop_iri} cannot be part of a property chain as it has a literal range {prop_range}"
                 )
-            property_spec = cls._specify_literal_property(prop_iri, prop_range)
+            property_spec = cls._specify_literal_property(
+                prop_iri=prop_iri,
+                python_type=prop_range,
+            )
         elif isinstance(prop_range, IRI):
             property_spec = cls._specify_class_property(
-                prop_iri,
-                prop_range,
-                property_chains,
-                ogm,
-                explore_class_properties,
+                prop_iri=prop_iri,
+                range_iri=prop_range,
+                nested_scope=nested_scope,
+                ogm=ogm,
+                explore_class_properties=explore_class_properties,
             )
         else:
             # Is blank node: Check if valid structure for complex datatype
@@ -280,13 +282,14 @@ class PropertySpec:
                 }}
             """
             if ogm.db.query(query_is_complex_type).get("boolean", False):
-                if property_chains and any(
-                    len(property_chain) > 0 for property_chain in property_chains
-                ):
+                if nested_scope:
                     raise ValueError(
-                        f"Property {prop_iri} cannot be part of a property chain as it has a literal range {prop_range}"
+                        f"Property {prop_iri} cannot be part of a property chain as it has a complex range {prop_range}"
                     )
-                property_spec = cls._specify_complex_property(prop_iri, ogm)
+                property_spec = cls._specify_complex_property(
+                    prop_iri=prop_iri,
+                    ogm=ogm,
+                )
             else:
                 raise ValueError(
                     f"Unknown property_type: {prop_range} for property {prop_iri}"
@@ -322,19 +325,20 @@ class PropertySpec:
         cls,
         prop_iri: IRI,
         range_iri: IRI,
-        property_chains: list[list[IRI]],
+        nested_scope: Optional["ClassScope"],
         ogm: "OGM",
         explore_class_properties: bool,
     ) -> PropertySpec:
         from .class_spec import ClassSpec
 
-        if not property_chains or len(property_chains) == 0:
+        if nested_scope is None:
+            # No nested scope, create a minimal ClassSpec
             nested_class_spec = ClassSpec(iri=range_iri)
         else:
             nested_class_spec = ClassSpec.specify(
                 ogm=ogm,
                 class_iri=range_iri,
-                property_chains=property_chains,
+                class_scope=nested_scope,
                 explore_class_properties=explore_class_properties,
             )
 

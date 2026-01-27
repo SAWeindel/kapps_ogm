@@ -12,6 +12,7 @@ from circular_factory_ogm.mapping.class_spec import ClassSpec
 from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from circular_factory_ogm.utils.blank_instance import _create_blank_instance
 from circular_factory_ogm.utils.loader_strategy import LoaderStrategy
+from circular_factory_ogm.utils.class_scope import ClassScope
 
 
 class OGM:
@@ -47,30 +48,28 @@ class OGM:
         self,
         *,
         class_iri: IRI,
-        property_chains: Optional[list[list[IRI]]] = None,
+        class_scope: Optional[ClassScope] = None,
         explore_class_properties: bool = True,
     ) -> ClassSpec:
         """
-        Resolve a ClassSpec for a given class IRI.
+        Resolve a ClassSpec for a given class IRI and ClassScope.
 
-        property_chain defines selective hydration of nested properties.
+        ClassScope defines selective hydration of nested properties.
         """
-        property_chains = (
-            property_chains
-            if property_chains is not None
-            else self.loader.expand(class_iri) if self.loader else None
+        class_scope = class_scope or (
+            self.loader.expand(class_iri) if self.loader else None
         )
         self.logger.debug(
             "Resolving ClassSpec for %s (chain=%s, explore_class_properties=%s)",
             class_iri,
-            property_chains,
+            class_scope,
             explore_class_properties,
         )
 
         spec = ClassSpec.specify(
             class_iri=class_iri,
             ogm=self,
-            property_chains=property_chains,
+            class_scope=class_scope,
             explore_class_properties=explore_class_properties,
         )
         return spec
@@ -84,7 +83,7 @@ class OGM:
         *,
         class_iri: IRI,
         data: dict,
-        property_chains: Optional[list[list[IRI]]] = None,
+        class_scope: Optional[ClassScope] = None,
         instance_iri: Optional[IRI] = None,
         persist: bool = True,
         named_graph: Optional[GraphNameLike] = None,
@@ -93,8 +92,8 @@ class OGM:
         Create a new Node instance with given data.
         Args:
             class_iri: IRI of the class to instantiate
+            class_scope: ClassScope defining the class and property structure
             data: Data dictionary for the instance (must conform to class_spec)
-            property_chains: Optional property chains for selective hydration
             instance_iri: Optional IRI for the new instance (if not provided, a new one will be generated)
             persist: Whether to persist the new instance to the graph database
         Returns:
@@ -105,15 +104,12 @@ class OGM:
         - API writes
         - JSON import
         """
-        property_chains = (
-            property_chains
-            if property_chains is not None
-            else self.loader.expand(class_iri) if self.loader else None
+        class_scope = class_scope or (
+            self.loader.expand(class_iri) if self.loader else None
         )
-
         class_spec = self.get_class_spec(
             class_iri=class_iri,
-            property_chains=property_chains,
+            class_scope=class_scope,
         )
 
         node = Node(
@@ -136,29 +132,27 @@ class OGM:
         self,
         *,
         class_iri: IRI,
-        property_chains: Optional[list[list[IRI]]] = None,
+        class_scope: Optional[ClassScope] = None,
         instance_iri: Optional[IRI] = None,
     ) -> pd.BaseModel:
         """
-        Create a blank pydantic instance for a given class IRI, able to serve as a template for data population.
+        Create a blank pydantic instance for a given ClassScope, able to serve as a template for data population.
 
         Args:
             class_iri: IRI of the class to instantiate
-            property_chains: Optional property chains for selective hydration
+            class_scope: ClassScope defining the class and property structure
             instance_iri: Optional IRI for the new instance
         Returns:
             pydantic BaseModel representing the blank instance
         """
-        property_chains = (
-            property_chains
-            if property_chains is not None
-            else self.loader.expand(class_iri) if self.loader else None
+        class_scope = class_scope or (
+            self.loader.expand(class_iri) if self.loader else None
         )
         return _create_blank_instance(
             ogm=self,
             instance_iri=instance_iri or IRI("urn:uuid:generated-blank-instance"),
             class_iri=class_iri,
-            property_chains=property_chains,
+            class_scope=class_scope,
             explore_class_properties=False,
         )
 
@@ -229,7 +223,7 @@ class OGM:
         self,
         instance_iri: IRI,
         property_spec: PropertySpec,
-        property_chains: Optional[list[list[IRI]]],
+        nested_class_scope: Optional[ClassScope],
         materialize: bool,
     ) -> list[Node]:
         # Query all instances of the property
@@ -238,18 +232,9 @@ class OGM:
             return []
         nested_instance_iris = [r[2] for r in triples]
 
-        # if there are property chains in which we are at the first element, we need to pass them down
-        # pass only chains that are non-empty after the first element is removed
-        # if no chain contains us, we are fetching as reference only
-        containing_chains = [
-            chain
-            for chain in property_chains or []
-            if chain and chain[0] == property_spec.iri
-        ]
-        as_reference = len(containing_chains) == 0
-        remaining_chains = [
-            chain[1:] for chain in containing_chains if len(chain) > 1
-        ] or None
+        # Check if this property has a child scope
+        # If not, fetch as reference only
+        as_reference = nested_class_scope is None
 
         property_data = []
 
@@ -257,7 +242,7 @@ class OGM:
             nested_instance = self.fetch(
                 instance_iri=nested_instance_iri,
                 class_spec=property_spec.nested,
-                property_chains=remaining_chains,
+                class_scope=nested_class_scope,
                 as_reference=as_reference,
                 materialize=materialize,
             )
@@ -270,7 +255,7 @@ class OGM:
         *,
         instance_iri: IRI,
         class_spec: Optional[ClassSpec] = None,
-        property_chains: Optional[list[list[IRI]]] = None,
+        class_scope: Optional[ClassScope] = None,
         as_reference: bool = False,
         materialize: bool = False,
     ) -> Node:
@@ -280,7 +265,7 @@ class OGM:
         Args:
             instance_iri: IRI of the instance to fetch
             class_spec: Optional ClassSpec to use for fetching. If not provided, it will be resolved automatically
-            property_chains: Optional property chains for selective hydration
+            class_scope: Optional ClassScope for selective hydration
             as_reference: If True, fetch only the IRI without loading properties
             materialize: If True, materialize the Node's data according to the ClassSpec.
                 Ignored if as_reference is True.
@@ -288,20 +273,20 @@ class OGM:
         Returns:
             Node representing the fetched instance
         """
-        if property_chains is None and self.loader is not None:
-            property_chains = self.loader.expand(instance_iri)
+        if class_scope is None and self.loader is not None:
+            class_scope = self.loader.expand(instance_iri)
 
         if class_spec is None:
             class_iri = self.db.owl_get_classes_of_individual(instance_iri)[0]
             class_spec = self.get_class_spec(
                 class_iri=class_iri,
-                property_chains=property_chains,
+                class_scope=class_scope,
                 explore_class_properties=False,
             )
 
         data = {}
         if not as_reference:
-            # Full fetch according to class spec and property chains
+            # Full fetch according to class spec and class scope
             for prop, property_spec in class_spec.properties.items():
                 match property_spec.value_kind:
                     case PropertyValueKind.LITERAL:
@@ -319,7 +304,7 @@ class OGM:
                         property_data = self._fetch_object_property(
                             instance_iri=instance_iri,
                             property_spec=property_spec,
-                            property_chains=property_chains,
+                            nested_class_scope=class_scope.get(prop, None),
                             materialize=materialize,
                         )
                     case _:

@@ -9,6 +9,7 @@ from graph_db_interface import GraphDBCredentials, GraphDB, IRI
 
 from circular_factory_ogm.ogm import OGM
 from circular_factory_ogm.mapping.class_spec import ClassSpec
+from circular_factory_ogm.utils.class_scope import ClassScope
 from circular_factory_ogm.utils.json_ogm_encoder import OGMEncoder
 from circular_factory_ogm.utils.pretty_print import format_triples_turtle
 
@@ -84,11 +85,13 @@ def main():
     db.logger.setLevel(logging.ERROR)
     ogm = OGM(db=db)
 
+    class_scope = ClassScope.from_property_chains(property_chains)
+
     # Specify TransferUnit with property chains - should be fully hydrated
     class_spec = ClassSpec.specify(
         class_iri=NODE_ID,
         ogm=ogm,
-        property_chains=property_chains,
+        class_scope=class_scope,
         explore_class_properties=True,
     )
     # print("TransferUnit ClassSpec (fully hydrated):")
@@ -106,7 +109,7 @@ def main():
 
     blank_instance = ogm.create_blank_instance(
         class_iri=NODE_ID,
-        property_chains=property_chains,
+        class_scope=class_scope,
         instance_iri="http://example.org/instances/TransferUnit1",
     )
     # print("\nBlank instance of TransferUnit with nested properties:")
@@ -117,12 +120,12 @@ def main():
     node1 = ogm.create(
         class_iri=NODE_ID,
         data=deepcopy(mock_data),  # is modified by adding ids
-        property_chains=property_chains,
+        class_scope=class_scope,
     )
     node2 = ogm.create(
         class_iri=NODE_ID,
         data=deepcopy(mock_data),  # is modified by adding ids
-        property_chains=property_chains,
+        class_scope=class_scope,
         persist=True,
         named_graph=IRI(
             "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances_generated"

@@ -7,6 +7,7 @@ from graph_db_interface import IRI
 
 from circular_factory_ogm.mapping.class_spec import ClassSpec
 from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
+from circular_factory_ogm.utils.class_scope import ClassScope
 
 if TYPE_CHECKING:
     from circular_factory_ogm.ogm import OGM
@@ -71,14 +72,14 @@ def _create_blank_instance(
     *,
     instance_iri: IRI,
     class_iri: IRI,
-    property_chains: Optional[list[list[IRI]]] = None,
+    class_scope: Optional[ClassScope] = None,
     explore_class_properties: bool = False,
 ) -> pd.BaseModel:
-    """Resolve schema (respecting property chains) and return a blank instance."""
+    """Resolve schema (respecting class scope) and return a blank instance."""
     class_spec = ClassSpec.specify(
         class_iri=class_iri,
         ogm=ogm,
-        property_chains=property_chains,
+        class_scope=class_scope,
         explore_class_properties=explore_class_properties,
     )
 

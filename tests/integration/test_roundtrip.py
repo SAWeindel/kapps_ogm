@@ -5,6 +5,7 @@ import deepdiff
 
 from graph_db_interface import IRI
 from circular_factory_ogm.ogm import OGM
+from circular_factory_ogm.utils.class_scope import ClassScope
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "test_data")
 
@@ -37,16 +38,19 @@ def test_roundtrip(
 ):
     data = json.load(open(os.path.join(DATA_DIR, data_json_name), "r"))
 
+    # Convert property_chains to ClassScope
+    class_scope = ClassScope.from_property_chains(property_chains=property_chains)
+
     node = ogm.create(
         class_iri=class_iri,
-        property_chains=property_chains,
+        class_scope=class_scope,
         data=data,
         persist=True,
     )
 
     node_fetched = ogm.fetch(
         instance_iri=node.id,
-        property_chains=property_chains,
+        class_scope=class_scope,
         materialize=True,
     )
 

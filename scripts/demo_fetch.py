@@ -7,6 +7,7 @@ from graph_db_interface import GraphDBCredentials, GraphDB, IRI
 from circular_factory_ogm.ogm import OGM
 from circular_factory_ogm.utils.json_ogm_encoder import OGMEncoder
 from circular_factory_ogm.utils.pretty_print import format_triples_turtle
+from circular_factory_ogm.utils.class_scope import ClassScope
 
 
 # property_chains = [
@@ -58,9 +59,13 @@ def main():
     # Refactored OGM: pass loader only
     ogm = OGM(db=db, loader=None)
     ogm.logger.setLevel(logging.DEBUG)
+
+    # Convert property_chains to ClassScope
+    class_scope = ClassScope.from_property_chains(property_chains)
+
     node = ogm.fetch(
         instance_iri=instance_iri,
-        property_chains=property_chains,
+        class_scope=class_scope,
         materialize=True,
     )
     print("=== Fetched Minimal Node Triples ===")
@@ -72,13 +77,13 @@ def main():
 
     class_spec = ogm.get_class_spec(
         class_iri=class_iri,
-        property_chains=property_chains,
+        class_scope=class_scope,
         explore_class_properties=True,
     )
     node2 = ogm.fetch(
         instance_iri=instance_iri,
         class_spec=class_spec,
-        property_chains=property_chains,
+        class_scope=class_scope,
         materialize=True,
     )
     print("=== Fetched Full Node Triples ===")
@@ -90,7 +95,7 @@ def main():
 
     node3 = ogm.create(
         class_iri=class_iri,
-        property_chains=property_chains,
+        class_scope=class_scope,
         data=node.data,
         persist=True,
     )

@@ -14,6 +14,7 @@ from unittest.mock import Mock
 from graph_db_interface import IRI
 from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from circular_factory_ogm.mapping.class_spec import ClassSpec
+from circular_factory_ogm.utils.class_scope import ClassScope
 from circular_factory_ogm.ogm import OGM
 
 
@@ -238,7 +239,7 @@ class TestPropertySpecification:
             PropertySpec.specify(
                 prop_iri=prop_iri,
                 ogm=ogm,
-                property_chains=[],
+                nested_scope=ClassScope(),
                 explore_class_properties=True,
             )
 
@@ -259,7 +260,7 @@ class TestPropertySpecification:
             PropertySpec.specify(
                 prop_iri=prop_iri,
                 ogm=ogm,
-                property_chains=[],
+                nested_scope=ClassScope(),
                 explore_class_properties=True,
             )
 
@@ -279,7 +280,7 @@ class TestPropertySpecification:
         prop_spec = PropertySpec.specify(
             prop_iri=prop_iri,
             ogm=ogm,
-            property_chains=[],
+            nested_scope=ClassScope(),
             explore_class_properties=True,
         )
 
@@ -303,7 +304,7 @@ class TestPropertySpecification:
             PropertySpec.specify(
                 prop_iri=prop_iri,
                 ogm=ogm,
-                property_chains=[],
+                nested_scope=ClassScope(),
                 explore_class_properties=True,
             )
 

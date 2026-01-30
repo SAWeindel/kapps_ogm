@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Optional, Type, Any, Dict, List, TYPE_CHECKING
+from enum import Enum
 from dataclasses import dataclass, field, asdict
 import logging
 import pydantic as pd
@@ -17,6 +18,13 @@ if TYPE_CHECKING:
     from circular_factory_ogm.ogm import OGM
 
 logger = logging.getLogger("cf_cspec")
+logger.setLevel(logging.DEBUG)
+
+
+class ClassHydrationLevel(Enum):
+    REFERENCE = "reference"
+    SCOPE = "scope"
+    FULL = "full"
 
 
 @dataclass
@@ -29,10 +37,15 @@ class ClassSpec:
     superclasses: List[IRI] = field(default_factory=list)
     pydantic_base_model: Optional[Type[pd.BaseModel]] = pd.BaseModel
     metadata: Dict[str, Any] = field(default_factory=dict)
-    _hydrated: bool = field(default=False, init=False)
+    hydration_level: ClassHydrationLevel = field(default=ClassHydrationLevel.REFERENCE)
 
     def to_string(self) -> str:
         return format_class_spec(self)
+
+    @property
+    def hydrated(self) -> bool:
+        """Whether this ClassSpec has been fully hydrated from the ontology."""
+        return self.hydration_level == ClassHydrationLevel.FULL
 
     def hydrate(self, ogm: "OGM") -> ClassSpec:
         """
@@ -46,7 +59,7 @@ class ClassSpec:
         hydrated_spec = ClassSpec.specify(
             self.iri,
             ogm,
-            explore_class_properties=True,
+            hydration_level=ClassHydrationLevel.FULL,
         )
         for key, value in asdict(hydrated_spec).items():
             setattr(self, key, value)
@@ -114,7 +127,7 @@ class ClassSpec:
         model_cls: Type[pd.BaseModel],
         instance: pd.BaseModel,
         ogm: "OGM",
-        explore_class_properties: bool,
+        hydration_level: ClassHydrationLevel,
     ) -> ClassSpec:
         """
         create a ClassSpec for the given Pydantic model by analyzing its RDF data in the GraphDB via the OGM instance.
@@ -131,7 +144,7 @@ class ClassSpec:
         return cls.specify(
             class_iri=iri,
             ogm=ogm,
-            explore_class_properties=explore_class_properties,
+            hydration_level=hydration_level,
         )
 
     @classmethod
@@ -139,8 +152,8 @@ class ClassSpec:
         cls,
         class_iri: IRI,
         ogm: "OGM",
+        hydration_level: ClassHydrationLevel,
         class_scope: Optional[ClassScope] = None,
-        explore_class_properties: bool = True,
     ) -> ClassSpec:
         """
         create a ClassSpec for the given IRI by analyzing the ClassScope, its RDF data in the GraphDB via the OGM instance.
@@ -149,7 +162,7 @@ class ClassSpec:
                 iri: The IRI of the class to specify
                 ogm: The OGM instance with access to the GraphDB
                 class_scope: The ClassScope defining the class and property structure
-                explore_class_properties: Whether to include all immediate properties or not
+                hydration_level: Whether to include all immediate properties or not
             Returns:
                 A ClassSpec instance representing the class specification"""
         db = ogm.db
@@ -213,7 +226,7 @@ class ClassSpec:
             sc_spec = ClassSpec.specify(
                 class_iri=sc,
                 ogm=ogm,
-                explore_class_properties=True,
+                hydration_level=ClassHydrationLevel.FULL,
             )
             duplicated_props = class_spec.properties.keys() & sc_spec.properties.keys()
             if duplicated_props:
@@ -248,16 +261,18 @@ class ClassSpec:
         )
 
         for prop in properties:
-            if not (explore_class_properties or prop in class_scope):
+            if (hydration_level is ClassHydrationLevel.REFERENCE) or (
+                hydration_level is ClassHydrationLevel.SCOPE and not prop in class_scope
+            ):
                 logger.debug(
-                    f"Skipping property {prop} of class {class_iri} as explore_class_properties is False and it is not in the class scope."
+                    f"Skipping property {prop} of class {class_iri} as hydration_level is '{hydration_level.name}' and prop in class scope is '{prop in class_scope}'."
                 )
                 continue  # skip properties if not explicitly requested
             class_spec.properties[prop] = PropertySpec.specify(
                 prop_iri=prop,
                 nested_scope=class_scope.get(prop, None),
                 ogm=ogm,
-                explore_class_properties=explore_class_properties,
+                hydration_level=hydration_level,
             )
 
         missing_properties = set(class_scope.keys()) - set(class_spec.properties.keys())
@@ -266,8 +281,8 @@ class ClassSpec:
                 f"Properties {missing_properties} specified in class scope, but not found as property of class {class_spec.iri}."
             )
 
-        # Mark as hydrated if it was fully specified. If explore_class_properties is False,
+        # Mark as hydrated if it was fully specified. If hydration_level is below FULL,
         # we cannot guarantee that all properties have been resolved.
-        class_spec._hydrated = explore_class_properties
+        class_spec.hydration_level = hydration_level
 
         return class_spec

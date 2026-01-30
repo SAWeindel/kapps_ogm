@@ -8,11 +8,12 @@ from graph_db_interface import GraphDB, IRI
 from graph_db_interface.utils.types import GraphNameLike
 
 from circular_factory_ogm.node.core import Node
-from circular_factory_ogm.mapping.class_spec import ClassSpec
+from circular_factory_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
 from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from circular_factory_ogm.utils.blank_instance import _create_blank_instance
 from circular_factory_ogm.utils.loader_strategy import LoaderStrategy
 from circular_factory_ogm.utils.class_scope import ClassScope
+from circular_factory_ogm.utils.pretty_print import format_triples_turtle
 
 
 class OGM:
@@ -49,7 +50,7 @@ class OGM:
         *,
         class_iri: IRI,
         class_scope: Optional[ClassScope] = None,
-        explore_class_properties: bool = True,
+        hydration_level: ClassHydrationLevel = ClassHydrationLevel.SCOPE,
     ) -> ClassSpec:
         """
         Resolve a ClassSpec for a given class IRI and ClassScope.
@@ -60,17 +61,17 @@ class OGM:
             self.loader.expand(class_iri) if self.loader else None
         )
         self.logger.debug(
-            "Resolving ClassSpec for %s (chain=%s, explore_class_properties=%s)",
+            "Resolving ClassSpec for %s (chain=%s, hydration_level=%s)",
             class_iri,
             class_scope,
-            explore_class_properties,
+            hydration_level,
         )
 
         spec = ClassSpec.specify(
             class_iri=class_iri,
             ogm=self,
             class_scope=class_scope,
-            explore_class_properties=explore_class_properties,
+            hydration_level=hydration_level,
         )
         return spec
 
@@ -122,9 +123,11 @@ class OGM:
         if node.has_data:
             node.materialize()
 
-            if persist:
-                triples = node.to_triples()
-                self.db.triples_add(triples, named_graph=named_graph)
+        if persist:
+            if not node.has_data:
+                raise ValueError("Cannot persist a Node without data.")
+            triples = node.to_triples()
+            self.db.triples_add(triples, named_graph=named_graph)
 
         return node
 
@@ -153,7 +156,7 @@ class OGM:
             instance_iri=instance_iri or IRI("urn:uuid:generated-blank-instance"),
             class_iri=class_iri,
             class_scope=class_scope,
-            explore_class_properties=False,
+            hydration_level=ClassHydrationLevel.SCOPE,
         )
 
     def _assign_id(self, node: Node) -> None:
@@ -277,11 +280,22 @@ class OGM:
             class_scope = self.loader.expand(instance_iri)
 
         if class_spec is None:
-            class_iri = self.db.owl_get_classes_of_individual(instance_iri)[0]
+            class_iri_set = self.db.owl_get_classes_of_individual(instance_iri)
+            if not class_iri_set:
+                raise ValueError(
+                    f"Could not determine class IRI for instance {instance_iri}"
+                )
+            if len(class_iri_set) > 1:
+                self.logger.warning(
+                    "Instance %s has multiple classes %s, using the first one.",
+                    instance_iri,
+                    class_iri_set,
+                )
+            class_iri = class_iri_set.pop()
             class_spec = self.get_class_spec(
                 class_iri=class_iri,
                 class_scope=class_scope,
-                explore_class_properties=False,
+                hydration_level=ClassHydrationLevel.SCOPE,
             )
 
         data = {}
@@ -336,38 +350,73 @@ class OGM:
     def commit(
         self,
         *,
-        staged_node: Optional[Node] = None,
-        staged_instance: Optional[pd.BaseModel] = None,
-        node_to_commit_to: Optional[Node] = None,
-        instance_to_commit_to: Optional[pd.BaseModel] = None,
-    ) -> bool:
-
-        if staged_node is None and staged_instance is None:
-            raise ValueError("Either staged_node or staged_instance must be provided.")
-        if node_to_commit_to is None and instance_to_commit_to is None:
-            self.logger.warning(
-                "No target node or instance provided to commit to; use create instead."
-            )
-            return False
-
-        if staged_node is None and staged_instance is not None:
-            staged_node = Node(
-                id=getattr(staged_instance, "id", None),
-                class_spec=ClassSpec.specify_from_model(
-                    model_cls=type(staged_instance),
-                    ogm=self,
-                ),
-                data=staged_instance.model_dump(),
-                ogm=self,
-            )
-
+        instance_iri: IRI,
+        data: dict,
+        named_graph: Optional[GraphNameLike] = None,
+    ) -> Node:
         """
-        Commit changes of an existing Node instance to the graph database.
-
+        Update a Node instance with given data.
         Args:
-            node: Node instance to commit
+            instance_iri: IRI of the instance to update
+            data: Data dictionary for the instance (must conform to class_spec)
+            named_graph: Optional named graph to persist the changes to
+        Returns:
+            Node representing the newly updated instance
         """
-        raise NotImplementedError("Commit method is not yet implemented.")
+        new_node = Node(id=instance_iri, data=data, ogm=self)
+
+        class_iri_set = self.db.owl_get_classes_of_individual(instance_iri)
+        if not class_iri_set:
+            raise ValueError(
+                f"Could not determine class IRI for instance {instance_iri}"
+            )
+        if len(class_iri_set) > 1:
+            self.logger.warning(
+                "Instance %s has multiple classes %s, using the first one.",
+                instance_iri,
+                class_iri_set,
+            )
+
+        class_iri = class_iri_set.pop()
+        class_scope = ClassScope.from_node_data(new_node)
+        class_spec = self.get_class_spec(
+            class_iri=class_iri,
+            class_scope=class_scope,
+            hydration_level=ClassHydrationLevel.SCOPE,
+        )
+
+        new_node.class_spec = class_spec
+        new_node.materialize()
+
+        old_node = self.fetch(
+            instance_iri=instance_iri,
+            class_spec=new_node.class_spec,
+            class_scope=class_scope,
+            materialize=True,
+        )
+
+        old_triples, new_triples = old_node.diff(other=new_node)
+
+        import json
+        from circular_factory_ogm.utils.json_ogm_encoder import OGMEncoder
+
+        print("\n--- Old data --- \n")
+        print(json.dumps(old_node.to_json_ld(), indent=2, cls=OGMEncoder))
+
+        print("\n--- New data --- \n")
+        print(json.dumps(new_node.to_json_ld(), indent=2, cls=OGMEncoder))
+
+        print(
+            f"Updating instance {instance_iri}: removing {len(old_triples)} triples, adding {len(new_triples)} triples:\n\n--- Old triples to be deleted ---\n{format_triples_turtle(old_triples)}\n\n--- New triples to be added ---\n{format_triples_turtle(new_triples)}",
+        )
+
+        self.db.triples_update(
+            old_triples=old_triples,
+            new_triples=new_triples,
+            named_graph=named_graph,
+        )
+
+        return new_node
 
     # ------------------------------------------------------------------
     # deletion of instances

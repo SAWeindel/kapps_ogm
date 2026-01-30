@@ -92,7 +92,7 @@ def main():
         class_iri=NODE_ID,
         ogm=ogm,
         class_scope=class_scope,
-        explore_class_properties=True,
+        hydration_level=True,
     )
     # print("TransferUnit ClassSpec (fully hydrated):")
     # print(class_spec.to_string())
@@ -119,12 +119,12 @@ def main():
 
     node1 = ogm.create(
         class_iri=NODE_ID,
-        data=deepcopy(mock_data),  # is modified by adding ids
+        data=mock_data,
         class_scope=class_scope,
     )
     node2 = ogm.create(
         class_iri=NODE_ID,
-        data=deepcopy(mock_data),  # is modified by adding ids
+        data=mock_data,
         class_scope=class_scope,
         persist=True,
         named_graph=IRI(

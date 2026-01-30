@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from graph_db_interface import IRI
 from graph_db_interface.utils.types import IRILike
+
+if TYPE_CHECKING:
+    from circular_factory_ogm.node.core import Node
 
 
 class ClassScope(dict[IRI, "ClassScope"]):
@@ -9,6 +14,26 @@ class ClassScope(dict[IRI, "ClassScope"]):
         key = IRI(key)
         value = ClassScope(value or {})
         super(ClassScope, self).__setitem__(key, value)
+
+    @classmethod
+    def from_node_data(cls, node: "Node") -> ClassScope:
+        from circular_factory_ogm.node.core import Node
+
+        def chains_from_node_data(node: Node) -> list[list[IRI]]:
+            if not isinstance(node, Node) or not node.data:
+                return [[]]
+
+            property_chains = []
+            for property_iri, nested_nodes in node.data.items():
+                for nested_node in nested_nodes:
+                    nested_chains = chains_from_node_data(nested_node)
+                    for chain in nested_chains:
+                        property_chains.append([property_iri] + chain)
+
+            return property_chains
+
+        chains = chains_from_node_data(node)
+        return cls.from_property_chains(chains)
 
     @classmethod
     def from_property_chains(cls, property_chains: list[list[IRILike]]) -> ClassScope:
@@ -36,8 +61,8 @@ class ClassScope(dict[IRI, "ClassScope"]):
         """
         property_chains = []
 
-        for property_iri, child_scope in self.items():
-            child_chains = child_scope.to_property_chains()
+        for property_iri, nested_scope in self.items():
+            child_chains = nested_scope.to_property_chains()
             if not child_chains:
                 property_chains.append([property_iri])
             else:

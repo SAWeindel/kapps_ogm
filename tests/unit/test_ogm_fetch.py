@@ -10,7 +10,7 @@ Tests Phase 1.1: Database Loading & Fetching
 from unittest.mock import Mock, patch
 
 from circular_factory_ogm.node.core import Node
-from circular_factory_ogm.mapping.class_spec import ClassSpec
+from circular_factory_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
 from circular_factory_ogm.utils.class_scope import ClassScope
 
 from .conftest import (
@@ -68,7 +68,7 @@ class TestOGMFetch:
             mock_get_spec.assert_called_once_with(
                 class_iri=TRANSFER_UNIT_IRI,
                 class_scope=class_scope,
-                explore_class_properties=False,
+                hydration_level=ClassHydrationLevel.SCOPE,
             )
 
     def test_fetch_without_property_chains(self, ogm_with_mock_db, mock_db):
@@ -88,5 +88,5 @@ class TestOGMFetch:
             mock_get_spec.assert_called_once_with(
                 class_iri=TRANSFER_UNIT_IRI,
                 class_scope=None,
-                explore_class_properties=False,
+                hydration_level=ClassHydrationLevel.SCOPE,
             )

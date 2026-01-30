@@ -48,7 +48,7 @@ class OGMEncoder(json.JSONEncoder):
         if isinstance(obj, IRI):
             return str(obj)
         if isinstance(obj, set):
-            return list(obj)
+            return tuple(obj)
         if hasattr(obj, "model_dump"):
             return _unline(obj.model_dump())
         if hasattr(obj, "dict"):

@@ -4,6 +4,7 @@ import json
 
 from graph_db_interface import GraphDBCredentials, GraphDB, IRI
 
+from circular_factory_ogm.mapping.class_spec import ClassHydrationLevel
 from circular_factory_ogm.ogm import OGM
 from circular_factory_ogm.utils.json_ogm_encoder import OGMEncoder
 from circular_factory_ogm.utils.pretty_print import format_triples_turtle
@@ -78,7 +79,7 @@ def main():
     class_spec = ogm.get_class_spec(
         class_iri=class_iri,
         class_scope=class_scope,
-        explore_class_properties=True,
+        hydration_level=ClassHydrationLevel.FULL,
     )
     node2 = ogm.fetch(
         instance_iri=instance_iri,

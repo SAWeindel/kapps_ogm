@@ -5,7 +5,7 @@ import pydantic as pd
 
 from graph_db_interface import IRI
 
-from circular_factory_ogm.mapping.class_spec import ClassSpec
+from circular_factory_ogm.mapping.class_spec import ClassSpec, ClassHydrationLevel
 from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from circular_factory_ogm.utils.class_scope import ClassScope
 
@@ -24,14 +24,19 @@ def _blank_value_for_property(ogm: "OGM", prop: PropertySpec) -> Any:
         return None
 
     if prop.value_kind is PropertyValueKind.OBJECT:
-        if prop.nested and getattr(prop.nested, "_hydrated", False):
+        if (
+            prop.nested
+            and not prop.nested.hydration_level is ClassHydrationLevel.REFERENCE
+        ):
             return _blank_instance_from_class_spec(ogm, class_spec=prop.nested)
         return None  # unresolved object → IRI placeholder
 
     if prop.value_kind is PropertyValueKind.COMPLEX:
-        if not prop.nested or not getattr(prop.nested, "_hydrated", False):
+        if not (
+            prop.nested and prop.nested.hydration_level is ClassHydrationLevel.FULL
+        ):
             raise RuntimeError(
-                f"Complex property {prop.iri} requires hydrated nested ClassSpec"
+                f"Complex property {prop.iri} requires fully hydrated nested ClassSpec"
             )
         return _blank_instance_from_class_spec(ogm, class_spec=prop.nested)
 
@@ -73,14 +78,14 @@ def _create_blank_instance(
     instance_iri: IRI,
     class_iri: IRI,
     class_scope: Optional[ClassScope] = None,
-    explore_class_properties: bool = False,
+    hydration_level: bool = False,
 ) -> pd.BaseModel:
     """Resolve schema (respecting class scope) and return a blank instance."""
     class_spec = ClassSpec.specify(
         class_iri=class_iri,
         ogm=ogm,
         class_scope=class_scope,
-        explore_class_properties=explore_class_properties,
+        hydration_level=hydration_level,
     )
 
     return _blank_instance_from_class_spec(

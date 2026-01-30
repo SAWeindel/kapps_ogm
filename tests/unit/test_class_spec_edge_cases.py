@@ -72,7 +72,7 @@ class TestClassSpecValidation:
             ClassSpec.specify(
                 ogm=ogm_with_mock_db,
                 class_iri=non_class_iri,
-                explore_class_properties=True,
+                hydration_level=True,
             )
 
 

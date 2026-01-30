@@ -13,7 +13,7 @@ from unittest.mock import Mock
 
 from graph_db_interface import IRI
 from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
-from circular_factory_ogm.mapping.class_spec import ClassSpec
+from circular_factory_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
 from circular_factory_ogm.utils.class_scope import ClassScope
 from circular_factory_ogm.ogm import OGM
 
@@ -127,7 +127,7 @@ class TestPropertySpecDatatypes:
         # Setup: Object property with nested ClassSpec
         nested_class = Mock(spec=ClassSpec)
         nested_class.iri = IRI("https://example.org/TargetClass")
-        nested_class._hydrated = True
+        nested_class.hydration_level = ClassHydrationLevel.FULL
         nested_class.to_pydantic_model = Mock(return_value=Mock)
 
         prop_spec = PropertySpec(
@@ -240,7 +240,7 @@ class TestPropertySpecification:
                 prop_iri=prop_iri,
                 ogm=ogm,
                 nested_scope=ClassScope(),
-                explore_class_properties=True,
+                hydration_level=True,
             )
 
     def test_specify_literal_property_with_multiple_ranges_raises(self, ogm: OGM):
@@ -261,7 +261,7 @@ class TestPropertySpecification:
                 prop_iri=prop_iri,
                 ogm=ogm,
                 nested_scope=ClassScope(),
-                explore_class_properties=True,
+                hydration_level=True,
             )
 
     def test_specify_class_property_creates_nested_class_spec(self, ogm: OGM):
@@ -281,7 +281,7 @@ class TestPropertySpecification:
             prop_iri=prop_iri,
             ogm=ogm,
             nested_scope=ClassScope(),
-            explore_class_properties=True,
+            hydration_level=True,
         )
 
         # Assert
@@ -305,7 +305,7 @@ class TestPropertySpecification:
                 prop_iri=prop_iri,
                 ogm=ogm,
                 nested_scope=ClassScope(),
-                explore_class_properties=True,
+                hydration_level=True,
             )
 
 

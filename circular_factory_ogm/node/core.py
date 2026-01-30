@@ -282,9 +282,17 @@ class Node:
             raise NotImplementedError("Can only diff against another Node instance")
 
         old_node_triples = utils.group_triples_by_bnode(set(self.to_triples()))
-        new_node_triples = set(other.to_triples())
-        old_triples = tuple(old_node_triples - new_node_triples)
-        new_triples = tuple(new_node_triples - old_node_triples)
+        new_node_triples = utils.group_triples_by_bnode(set(other.to_triples()))
+
+        old_triples = set()
+        new_triples = set()
+        for triple_set in old_node_triples:
+            if triple_set not in new_node_triples:
+                old_triples.update(triple_set)
+        for triple_set in new_node_triples:
+            if triple_set not in old_node_triples:
+                new_triples.update(triple_set)
+
         return old_triples, new_triples
 
     # -------------------------

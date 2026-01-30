@@ -13,8 +13,10 @@ PATH = os.path.dirname(os.path.abspath(__file__))
 class_iri = IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit")
 
 old_data = {
+    "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#TransferUnitFromData1",
     "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorBelt": [
         {
+            "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#ConveyorBeltFromData1",
             "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_isWorking": [
                 True
             ],
@@ -24,7 +26,7 @@ old_data = {
                         1.25
                     ],
                     "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasUnit": [
-                        "meters"
+                        "meter"
                     ],
                 }
             ],
@@ -32,6 +34,7 @@ old_data = {
     ],
     "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasLightBarrier": [
         {
+            "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#LightBarrierFromData1",
             "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_isOccupied": [
                 {
                     "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": [
@@ -45,21 +48,24 @@ old_data = {
 # in the new test data, the nested class instance iris are not transferred.
 # This means that the nested instances will be created anew with new IRIs
 new_data = {
+    "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#TransferUnitFromData1",
     "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorBelt": [
         {
+            "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#ConveyorBeltFromData1",
             "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_isWorking": [
-                True
+                False  # Value changed, was True -> Simple attribute to be updated
             ],
             "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorPosition": [
                 {
                     "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": [
-                        -1.25
+                        -1.25  # Value changed, was 1.25 -> Whole complex attribute needs to be replaced
                     ],
                     "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasUnit": [
-                        "meters"
+                        "meter"
                     ],
                 }
             ],
+            # hasConveyorSpeed added -> New complex attribute to be added
             "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorSpeed": [
                 {
                     "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": [
@@ -71,8 +77,25 @@ new_data = {
                 }
             ],
         }
-    ]
+    ],
+    # Note: Light barrier instance omitted -> OWA says that we CAN NOT delete it
 }
+
+# We want to see diff:
+# --- removed ---
+# ConveyorBeltFromData1 isWorking True
+# ConveyorBeltFromData1 hasConveyorPosition ?A
+# ?A hasValue 1.25
+# ?A hasUnit "meter"
+#
+# --- added ---
+# ConveyorBeltFromData1 isWorking False
+# ConveyorBeltFromData1 hasConveyorSpeed ?B
+# ?B hasValue 1.23
+# ?B hasUnit "meter_per_second"
+# ConveyorBeltFromData1 hasConveyorPosition ?C
+# ?C hasValue -1.25
+# ?C hasUnit "meter"
 
 
 def main():
@@ -115,20 +138,11 @@ def main():
         class_scope=old_class_scope,
         persist=True,
     )
-    old_node_dict = old_node.instance.model_dump()
-    old_node_serialized = json.dumps(old_node_dict, indent=2)
 
     print("Created node:")
-    print(old_node_serialized)
+    print(json.dumps(old_node.instance.model_dump(), indent=2))
 
-    new_node_serialized = old_node_serialized.replace(
-        json.dumps(old_data, separators=(",", ":")),
-        json.dumps(new_data, separators=(",", ":")),
-    )
-
-    new_data_dict = json.loads(new_node_serialized)
-
-    new_node = ogm.commit(instance_iri=old_node.id, data=new_data_dict)
+    new_node = ogm.commit(instance_iri=old_node.id, data=new_data)
 
     print("Updated node:")
     print(json.dumps(new_node.to_json_ld(), indent=2, cls=OGMEncoder))

@@ -363,37 +363,35 @@ class OGM:
         Returns:
             Node representing the newly updated instance
         """
-        new_node = Node(id=instance_iri, data=data, ogm=self)
-
-        class_iri_set = self.db.owl_get_classes_of_individual(instance_iri)
-        if not class_iri_set:
-            raise ValueError(
-                f"Could not determine class IRI for instance {instance_iri}"
-            )
-        if len(class_iri_set) > 1:
-            self.logger.warning(
-                "Instance %s has multiple classes %s, using the first one.",
-                instance_iri,
-                class_iri_set,
-            )
-
-        class_iri = class_iri_set.pop()
-        class_scope = ClassScope.from_node_data(new_node)
-        class_spec = self.get_class_spec(
+        temp_node = Node(id=instance_iri, data=data, ogm=self)
+        classscope = ClassScope.from_node_data(temp_node)
+        class_iri = self.db.owl_get_classes_of_individual(instance_iri).pop()
+        staged_node = self.create(
             class_iri=class_iri,
-            class_scope=class_scope,
-            hydration_level=ClassHydrationLevel.SCOPE,
-        )
-
-        new_node.class_spec = class_spec
-        new_node.materialize()
+            data=data,
+            class_scope=classscope,
+            instance_iri=instance_iri,
+            persist=False,
+        )  # => node, validated and sound with ontology
 
         old_node = self.fetch(
             instance_iri=instance_iri,
-            class_spec=new_node.class_spec,
-            class_scope=class_scope,
+            class_scope=classscope,
             materialize=True,
         )
+
+        # TODO: Move to graphdb interface
+        # class_iri_set = self.db.owl_get_classes_of_individual(instance_iri)
+        # if not class_iri_set:
+        #     raise ValueError(
+        #         f"Could not determine class IRI for instance {instance_iri}"
+        #     )
+        # if len(class_iri_set) > 1:
+        #     self.logger.warning(
+        #         "Instance %s has multiple classes %s, using the first one.",
+        #         instance_iri,
+        #         class_iri_set,
+        #     )
 
         old_triples, new_triples = old_node.diff(other=new_node)
 
@@ -416,7 +414,7 @@ class OGM:
             named_graph=named_graph,
         )
 
-        return new_node
+        return staged_node
 
     # ------------------------------------------------------------------
     # deletion of instances

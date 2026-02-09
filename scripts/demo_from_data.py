@@ -11,6 +11,9 @@ from circular_factory_ogm.utils.json_ogm_encoder import OGMEncoder
 PATH = os.path.dirname(os.path.abspath(__file__))
 
 class_iri = IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit")
+instance_iri = IRI(
+    "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#TransferUnit1"
+)
 
 old_data = {
     "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#TransferUnitFromData1",
@@ -131,6 +134,8 @@ def main():
             ],
         ]
     )
+    
+    ogm.commit(instance_iri= instance_iri, data=new_data)
 
     old_node = ogm.create(
         class_iri=class_iri,

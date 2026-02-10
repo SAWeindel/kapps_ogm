@@ -98,7 +98,7 @@ new_data = {
 # ?B hasUnit "meter_per_second"
 # ConveyorBeltFromData1 hasConveyorPosition ?C
 # ?C hasValue -1.25
-# ?C hasUnit "meter"
+# ?C hasUnit "meter".
 
 
 def main():
@@ -134,8 +134,8 @@ def main():
             ],
         ]
     )
-    
-    ogm.commit(instance_iri= instance_iri, data=new_data)
+
+    ogm.commit(instance_iri=instance_iri, data=new_data)
 
     old_node = ogm.create(
         class_iri=class_iri,

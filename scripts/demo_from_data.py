@@ -1,19 +1,18 @@
+import copy
+import difflib
 import os
 import logging
 import json
 
 from graph_db_interface import GraphDBCredentials, GraphDB, IRI
 
+from circular_factory_ogm.node.core import Node
 from circular_factory_ogm.ogm import OGM
 from circular_factory_ogm.utils.class_scope import ClassScope
-from circular_factory_ogm.utils.json_ogm_encoder import OGMEncoder
 
 PATH = os.path.dirname(os.path.abspath(__file__))
 
 class_iri = IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit")
-instance_iri = IRI(
-    "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#TransferUnit1"
-)
 
 old_data = {
     "id": "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances#TransferUnitFromData1",
@@ -98,7 +97,34 @@ new_data = {
 # ?B hasUnit "meter_per_second"
 # ConveyorBeltFromData1 hasConveyorPosition ?C
 # ?C hasValue -1.25
-# ?C hasUnit "meter".
+# ?C hasUnit "meter"
+
+
+def _sorted_json(data: dict) -> str:
+    return json.dumps(data, indent=2, sort_keys=True)
+
+
+def _print_diff(label: str, expected: dict, actual: dict) -> None:
+    expected_json = _sorted_json(expected)
+    actual_json = _sorted_json(actual)
+    diff_lines = list(
+        difflib.unified_diff(
+            expected_json.splitlines(),
+            actual_json.splitlines(),
+            fromfile=f"{label}_expected",
+            tofile=f"{label}_actual",
+            lineterm="",
+        )
+    )
+    if diff_lines:
+        print(f"\nDiff for {label}:\n" + "\n".join(diff_lines))
+    else:
+        print(f"\nDiff for {label}: <empty>")
+
+
+def _scope_from_data(ogm: OGM, data: dict) -> ClassScope:
+    temp_node = Node(data=copy.deepcopy(data), ogm=ogm)
+    return ClassScope.from_node_data(temp_node)
 
 
 def main():
@@ -116,26 +142,12 @@ def main():
     ogm = OGM(db=db)
     ogm.logger.setLevel(logging.DEBUG)
 
-    old_class_scope = ClassScope.from_property_chains(
-        property_chains=[
-            [
-                IRI(
-                    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt"
-                ),
-                IRI(
-                    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorPosition"
-                ),
-            ],
-            [
-                IRI(
-                    "https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasLightBarrier"
-                ),
-                IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#isOccupied"),
-            ],
-        ]
-    )
+    print("Clearing default graph...")
+    cleared = db.clear_graph()
+    print(f"Default graph cleared: {cleared}")
 
-    ogm.commit(instance_iri=instance_iri, data=new_data)
+    old_class_scope = _scope_from_data(ogm, old_data)
+    new_class_scope = _scope_from_data(ogm, new_data)
 
     old_node = ogm.create(
         class_iri=class_iri,
@@ -144,14 +156,37 @@ def main():
         persist=True,
     )
 
-    print("Created node:")
-    print(json.dumps(old_node.instance.model_dump(), indent=2))
+    fetched_before_update = ogm.fetch(
+        instance_iri=old_node.id,
+        class_spec=old_node.class_spec,
+        class_scope=old_class_scope,
+        materialize=True,
+    )
+    fetched_before_payload = fetched_before_update.instance.model_dump()
+    fetched_before_json = _sorted_json(fetched_before_payload)
+    print("\nFetched node before update:")
+    print(fetched_before_json)
+
+    _print_diff("before_update", old_data, fetched_before_payload)
 
     new_node = ogm.commit(instance_iri=old_node.id, data=new_data)
 
-    print("Updated node:")
-    print(json.dumps(new_node.to_json_ld(), indent=2, cls=OGMEncoder))
-    pass
+    fetched_after_update = ogm.fetch(
+        instance_iri=old_node.id,
+        class_spec=new_node.class_spec,
+        class_scope=new_class_scope,
+        materialize=True,
+    )
+    fetched_after_payload = fetched_after_update.instance.model_dump()
+    fetched_after_json = _sorted_json(fetched_after_payload)
+    print("\nFetched node after update:")
+    print(fetched_after_json)
+
+    _print_diff("after_update", new_data, fetched_after_payload)
+
+    print("\nClearing default graph after demo...")
+    cleared_post = db.clear_graph()
+    print(f"Default graph cleared: {cleared_post}")
 
 
 if __name__ == "__main__":

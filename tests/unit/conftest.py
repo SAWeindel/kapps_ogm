@@ -6,9 +6,9 @@ import pytest
 from unittest.mock import Mock
 
 from graph_db_interface import GraphDB, GraphDBCredentials, IRI
-from circular_factory_ogm.ogm import OGM
-from circular_factory_ogm.mapping.class_spec import ClassSpec
-from circular_factory_ogm.node.core import Node
+from kapps_ogm.ogm import OGM
+from kapps_ogm.mapping.class_spec import ClassSpec
+from kapps_ogm.node.core import Node
 
 
 # Test data constants

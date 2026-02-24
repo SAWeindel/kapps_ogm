@@ -12,9 +12,9 @@ import pytest
 from unittest.mock import Mock
 
 from graph_db_interface import IRI
-from circular_factory_ogm.ogm import OGM
-from circular_factory_ogm.mapping.class_spec import ClassSpec
-from circular_factory_ogm.mapping.property_spec import PropertySpec
+from kapps_ogm.ogm import OGM
+from kapps_ogm.mapping.class_spec import ClassSpec
+from kapps_ogm.mapping.property_spec import PropertySpec
 
 from .conftest import TRANSFER_UNIT_IRI
 
@@ -69,7 +69,11 @@ class TestClassSpecValidation:
 
         # Execute & Assert
         with pytest.raises(ValueError, match="is not an OWL/RDFS Class"):
-            ClassSpec.specify(ogm=ogm_with_mock_db, class_iri=non_class_iri)
+            ClassSpec.specify(
+                ogm=ogm_with_mock_db,
+                class_iri=non_class_iri,
+                hydration_level=True,
+            )
 
 
 class TestClassSpecSerialization:

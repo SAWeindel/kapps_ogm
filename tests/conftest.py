@@ -5,7 +5,7 @@ import pytest
 from aas_middleware import AasMiddleware
 from graph_db_interface import GraphDB, GraphDBCredentials
 
-from circular_factory_ogm.ogm import OGM
+from kapps_ogm.ogm import OGM
 
 REPOSITORY = "OGM"
 
@@ -37,7 +37,7 @@ def db() -> GraphDB:
         "http://example.org/named_graph",
         "http://example.org/local_named_graph",
     ]:
-        db.clear_graph(graph)
+        assert db.clear_graph(graph)
 
     return db
 

@@ -277,6 +277,12 @@ def _value_to_triples(
 
         triples.add((subject, predicate, obj))
 
+        # If the nested object only provides an id and has no schema info,
+        # relax serialization by emitting a reference triple only.
+        iri_field_map: dict[str, IRI] = getattr(value.__class__, "_iri_fields", {})
+        if nested_id and not iri_field_map:
+            return triples
+
         # Recurse - nested object serializes its own properties
         nested_node = Node(
             id=obj,

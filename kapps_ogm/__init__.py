@@ -10,6 +10,7 @@ from .utils import (
     PROPERTY_TYPES,
     PROPERTY_CHARACTERISTICS,
     OGMEncoder,
+    ClassScope,
 )
 
 __all__ = [
@@ -23,4 +24,5 @@ __all__ = [
     "PROPERTY_TYPES",
     "PROPERTY_CHARACTERISTICS",
     "OGMEncoder",
+    "ClassScope",
 ]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Optional, Type, Any, Dict, List, TYPE_CHECKING
+from enum import Enum
 from dataclasses import dataclass, field, asdict
 import logging
 import pydantic as pd
@@ -9,13 +10,21 @@ from pydantic import ConfigDict  # Pydantic v2
 
 
 from graph_db_interface import IRI
-from circular_factory_ogm.utils.pretty_print import format_class_spec
-from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
+from kapps_ogm.utils.pretty_print import format_class_spec
+from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
+from kapps_ogm.utils.class_scope import ClassScope
 
 if TYPE_CHECKING:
-    from circular_factory_ogm.ogm import OGM
+    from kapps_ogm.ogm import OGM
 
 logger = logging.getLogger("cf_cspec")
+logger.setLevel(logging.DEBUG)
+
+
+class ClassHydrationLevel(Enum):
+    REFERENCE = "reference"
+    SCOPE = "scope"
+    FULL = "full"
 
 
 @dataclass
@@ -28,10 +37,15 @@ class ClassSpec:
     superclasses: List[IRI] = field(default_factory=list)
     pydantic_base_model: Optional[Type[pd.BaseModel]] = pd.BaseModel
     metadata: Dict[str, Any] = field(default_factory=dict)
-    _hydrated: bool = field(default=False, init=False)
+    hydration_level: ClassHydrationLevel = field(default=ClassHydrationLevel.REFERENCE)
 
     def to_string(self) -> str:
         return format_class_spec(self)
+
+    @property
+    def hydrated(self) -> bool:
+        """Whether this ClassSpec has been fully hydrated from the ontology."""
+        return self.hydration_level == ClassHydrationLevel.FULL
 
     def hydrate(self, ogm: "OGM") -> ClassSpec:
         """
@@ -42,7 +56,11 @@ class ClassSpec:
         if not self.iri:
             raise ValueError("Cannot hydrate ClassSpec without an IRI.")
 
-        hydrated_spec = ClassSpec.specify(self.iri, ogm)
+        hydrated_spec = ClassSpec.specify(
+            self.iri,
+            ogm,
+            hydration_level=ClassHydrationLevel.FULL,
+        )
         for key, value in asdict(hydrated_spec).items():
             setattr(self, key, value)
         return self
@@ -87,6 +105,7 @@ class ClassSpec:
         if ConfigDict is not None:
             model_cls.model_config = ConfigDict(extra="forbid")
         else:
+
             class Config(getattr(self.pydantic_base_model, "Config", object)):
                 extra = "forbid"
 
@@ -104,8 +123,11 @@ class ClassSpec:
 
     @classmethod
     def specify_from_instance(
+        cls,
+        model_cls: Type[pd.BaseModel],
         instance: pd.BaseModel,
         ogm: "OGM",
+        hydration_level: ClassHydrationLevel,
     ) -> ClassSpec:
         """
         create a ClassSpec for the given Pydantic model by analyzing its RDF data in the GraphDB via the OGM instance.
@@ -119,21 +141,28 @@ class ClassSpec:
         if iri is None:
             raise ValueError(f"Model {model_cls.__name__} has no associated IRI.")
 
-        return cls.specify(class_iri=iri, ogm=ogm)
+        return cls.specify(
+            class_iri=iri,
+            ogm=ogm,
+            hydration_level=hydration_level,
+        )
 
     @classmethod
     def specify(
         cls,
         class_iri: IRI,
         ogm: "OGM",
-        property_chains: Optional[list[list[IRI]]] = None,
+        hydration_level: ClassHydrationLevel,
+        class_scope: Optional[ClassScope] = None,
     ) -> ClassSpec:
         """
-        create a ClassSpec for the given IRI by analyzing its RDF data in the GraphDB via the OGM instance.
+        create a ClassSpec for the given IRI by analyzing the ClassScope, its RDF data in the GraphDB via the OGM instance.
 
             Args:
                 iri: The IRI of the class to specify
                 ogm: The OGM instance with access to the GraphDB
+                class_scope: The ClassScope defining the class and property structure
+                hydration_level: Whether to include all immediate properties or not
             Returns:
                 A ClassSpec instance representing the class specification"""
         db = ogm.db
@@ -161,7 +190,7 @@ class ClassSpec:
                 logger.warning(
                     f"Class {class_iri} has multiple rdfs:label values; using the first one."
                 )
-            class_spec.label = str(label_triples[0][2])
+            class_spec.label = str(label_triples.pop()[2])
 
         # Get the (first) comment of the class
         comment_triples = db.triples_get(
@@ -172,15 +201,13 @@ class ClassSpec:
                 logger.warning(
                     f"Class {class_iri} has multiple rdfs:comment values; using the first one."
                 )
-            class_spec.comment = str(comment_triples[0][2])
+            class_spec.comment = str(comment_triples.pop()[2])
 
         # Get the superclasses of the class
-        superclasses = [
-            triple[2]
-            for triple in db.triples_get(
-                sub=class_iri, pred="rdfs:subClassOf", include_implicit=True
-            )
-        ]
+        superclass_triples = db.triples_get(
+            sub=class_iri, pred="rdfs:subClassOf", include_implicit=True
+        )
+        superclasses = [triple[2] for triple in superclass_triples]
         if class_iri in superclasses:
             superclasses.remove(class_iri)
         else:
@@ -195,7 +222,12 @@ class ClassSpec:
 
         # inherit properties from superclasses
         for sc in superclasses:
-            sc_spec = ClassSpec.specify(class_iri=sc, ogm=ogm)
+            # Always resolve superclasses fully
+            sc_spec = ClassSpec.specify(
+                class_iri=sc,
+                ogm=ogm,
+                hydration_level=ClassHydrationLevel.FULL,
+            )
             duplicated_props = class_spec.properties.keys() & sc_spec.properties.keys()
             if duplicated_props:
                 logger.warning(
@@ -229,50 +261,28 @@ class ClassSpec:
         )
 
         for prop in properties:
-            class_spec.properties[prop] = PropertySpec.specify(prop_iri=prop, ogm=ogm)
-
-        ### Follow property chains to hydrate connected ClassSpecs
-        if property_chains:
-            for property_chain in property_chains:
-                if len(property_chain) == 0:
-                    continue  # skip empty chains
-
-                next_property = property_chain[0]
-                if next_property not in class_spec.properties:
-                    raise ValueError(
-                        f"Property {class_spec.iri} -> {next_property} not found while processing property chain."
-                    )
-
-                prop_spec = class_spec.properties[next_property]
-
-                if prop_spec.value_kind == PropertyValueKind.COMPLEX:
-                    logger.warning(
-                        f"Property {class_spec.iri} -> {next_property} of type '{prop_spec.value_kind.name}'."
-                        f"This property is always specified, since it poinbts towards a blank node, and therefore could otherwise not be expanded afterwards."
-                        
-                    )
-                    continue
-
-                if prop_spec.nested is None:
-                    raise ValueError(
-                        f"Property {class_spec.iri} -> {next_property} has no nested ClassSpec (cannot continue property chain)."
-                    )
-
-                # Rebuild nested ClassSpec with remaining chain tail
-                remaining_chain = property_chain[1:]
+            if (hydration_level is ClassHydrationLevel.REFERENCE) or (
+                hydration_level is ClassHydrationLevel.SCOPE and not prop in class_scope
+            ):
                 logger.debug(
-                    f"'{class_spec.iri}' specifies '{prop_spec.nested.iri}' following chain {[i for i in property_chain]}"
+                    f"Skipping property {prop} of class {class_iri} as hydration_level is '{hydration_level.name}' and prop in class scope is '{prop in class_scope}'."
                 )
-                nested_spec = cls.specify(
-                    class_iri=prop_spec.nested.iri,
-                    ogm=ogm,
-                    property_chains=[remaining_chain] if remaining_chain else None,
-                )
+                continue  # skip properties if not explicitly requested
+            class_spec.properties[prop] = PropertySpec.specify(
+                prop_iri=prop,
+                nested_scope=class_scope.get(prop, None),
+                ogm=ogm,
+                hydration_level=hydration_level,
+            )
 
-                # Replace nested spec for this chain only
-                prop_spec.nested = nested_spec
+        missing_properties = set(class_scope.keys()) - set(class_spec.properties.keys())
+        if missing_properties:
+            raise ValueError(
+                f"Properties {missing_properties} specified in class scope, but not found as property of class {class_spec.iri}."
+            )
 
-        # Mark as hydrated if it was fully specified
-        class_spec._hydrated = True
+        # Mark as hydrated if it was fully specified. If hydration_level is below FULL,
+        # we cannot guarantee that all properties have been resolved.
+        class_spec.hydration_level = hydration_level
 
         return class_spec

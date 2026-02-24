@@ -8,6 +8,7 @@ from .pretty_print import (
     format_class_spec,
 )
 from .json_ogm_encoder import OGMEncoder
+from .class_scope import ClassScope
 
 __all__ = [
     "PROPERTY_TYPES",
@@ -17,4 +18,5 @@ __all__ = [
     "format_property_spec",
     "format_class_spec",
     "OGMEncoder",
+    "ClassScope",
 ]

@@ -8,7 +8,7 @@ from graph_db_interface import IRI
 
 if TYPE_CHECKING:
     from .core import Node
-    from circular_factory_ogm.ogm import OGM
+    from kapps_ogm.ogm import OGM
 
 logger = logging.getLogger("cf_node_formatter")
 logger.setLevel(logging.DEBUG)
@@ -18,7 +18,7 @@ def sanitize_data(
     data: Dict,
     node: "Node",
     known_nodes: Optional[Dict[int, "Node"]] = None,
-) -> dict[IRI, List[Any]]:
+) -> tuple[dict[IRI, List[Any]], IRI]:
     """
     Recursively converts provided data dict into a unified format.
 
@@ -34,7 +34,7 @@ def sanitize_data(
         ogm: OGM instance for creating nested Node instances.
 
     Returns:
-        dict[IRI, List[Any]]: Sanitized data with IRI keys and list values.
+        tuple[dict[IRI, List[Any]], IRI]: Sanitized data with IRI keys and list values, and the node ID.
 
     Raises:
         ValueError: If data cannot be converted into the expected format.

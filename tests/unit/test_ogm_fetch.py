@@ -9,8 +9,9 @@ Tests Phase 1.1: Database Loading & Fetching
 
 from unittest.mock import Mock, patch
 
-from circular_factory_ogm.node.core import Node
-from circular_factory_ogm.mapping.class_spec import ClassSpec
+from kapps_ogm.node.core import Node
+from kapps_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
+from kapps_ogm.utils.class_scope import ClassScope
 
 from .conftest import (
     TRANSFER_UNIT_IRI,
@@ -34,9 +35,10 @@ class TestOGMFetch:
         with patch.object(
             ogm_with_mock_db, "get_class_spec", return_value=mock_class_spec
         ):
+            class_scope = ClassScope.from_property_chains(PROPERTY_CHAINS)
             # Execute
             node = ogm_with_mock_db.fetch(
-                instance_iri=INSTANCE_IRI, property_chains=PROPERTY_CHAINS
+                instance_iri=INSTANCE_IRI, class_scope=class_scope
             )
 
         # Assert
@@ -59,13 +61,14 @@ class TestOGMFetch:
             ogm_with_mock_db, "get_class_spec", return_value=mock_class_spec
         ) as mock_get_spec:
             # Execute
-            ogm_with_mock_db.fetch(
-                instance_iri=INSTANCE_IRI, property_chains=PROPERTY_CHAINS
-            )
+            class_scope = ClassScope.from_property_chains(PROPERTY_CHAINS)
+            ogm_with_mock_db.fetch(instance_iri=INSTANCE_IRI, class_scope=class_scope)
 
             # Assert: get_class_spec was called with property_chains
             mock_get_spec.assert_called_once_with(
-                class_iri=TRANSFER_UNIT_IRI, property_chains=PROPERTY_CHAINS
+                class_iri=TRANSFER_UNIT_IRI,
+                class_scope=class_scope,
+                hydration_level=ClassHydrationLevel.SCOPE,
             )
 
     def test_fetch_without_property_chains(self, ogm_with_mock_db, mock_db):
@@ -83,5 +86,7 @@ class TestOGMFetch:
 
             # Assert: get_class_spec was called with None for property_chains
             mock_get_spec.assert_called_once_with(
-                class_iri=TRANSFER_UNIT_IRI, property_chains=None
+                class_iri=TRANSFER_UNIT_IRI,
+                class_scope=None,
+                hydration_level=ClassHydrationLevel.SCOPE,
             )

@@ -7,16 +7,18 @@ from graph_db_interface import IRI, XSDToPythonTypes
 import logging
 from pydantic import BeforeValidator, Field, conlist
 
-from circular_factory_ogm.utils.constants import (
+from kapps_ogm.utils.constants import (
     PROPERTY_TYPES,
     PROPERTY_CHARACTERISTICS,
 )
+from kapps_ogm.utils.class_scope import ClassScope
 
 if TYPE_CHECKING:
-    from circular_factory_ogm.mapping.class_spec import ClassSpec
-    from circular_factory_ogm.ogm import OGM
+    from kapps_ogm.mapping.class_spec import ClassSpec, ClassHydrationLevel
+    from kapps_ogm.ogm import OGM
 
 logger = logging.getLogger("cf_pspec")
+logger.setLevel(logging.DEBUG)
 
 
 class PropertyValueKind(Enum):
@@ -49,6 +51,8 @@ class PropertySpec:
 
     def to_pydantic_field(self) -> tuple[Any, Any]:
         """Convert this PropertySpec into a Pydantic field with validators."""
+        from .class_spec import ClassHydrationLevel
+
         if not self.value_kind in PropertyValueKind:
             raise ValueError(f"Unknown value_kind: {self.value_kind}")
 
@@ -71,7 +75,12 @@ class PropertySpec:
                     base_type = self.python_range_type or Any
             case PropertyValueKind.OBJECT:
                 # Nested hydrated class becomes Pydantic model; else fallback to IRI
-                if self.nested and getattr(self.nested, "_hydrated", False):
+                if (
+                    not self.nested
+                    or self.nested.hydration_level is ClassHydrationLevel.REFERENCE
+                ):
+                    base_type = IRI
+                else:
                     nested_model = self.nested.to_pydantic_model()
                     base_type = nested_model
 
@@ -84,7 +93,7 @@ class PropertySpec:
                         if isinstance(value, nested_model):
                             return value
                         try:
-                            from circular_factory_ogm.node.core import (
+                            from kapps_ogm.node.core import (
                                 Node,
                             )  # Lazy import to avoid cycles
                         except Exception:
@@ -103,11 +112,14 @@ class PropertySpec:
                         return value
 
                     validators.append(BeforeValidator(coerce_object))
-                else:
-                    base_type = IRI
             case PropertyValueKind.COMPLEX:
                 # Complex properties have nested ClassSpec that should be converted to Pydantic model
-                if self.nested:
+                if (
+                    not self.nested
+                    or self.nested.hydration_level is ClassHydrationLevel.REFERENCE
+                ):
+                    base_type = Any
+                else:
                     nested_model = self.nested.to_pydantic_model()
                     base_type = nested_model
 
@@ -120,7 +132,7 @@ class PropertySpec:
                         if isinstance(value, nested_model):
                             return value
                         try:
-                            from circular_factory_ogm.node.core import (
+                            from kapps_ogm.node.core import (
                                 Node,
                             )  # Lazy import to avoid cycles
                         except Exception:
@@ -139,8 +151,6 @@ class PropertySpec:
                         return value
 
                     validators.append(BeforeValidator(coerce_complex))
-                else:
-                    base_type = Any
             case _:
                 raise RuntimeError
 
@@ -201,7 +211,9 @@ class PropertySpec:
     def specify(
         cls,
         prop_iri: IRI,
+        nested_scope: Optional["ClassScope"],
         ogm: "OGM",
+        hydration_level: "ClassHydrationLevel",
     ) -> PropertySpec:
         # Categorize the property regarding its type and characteristics
         query_result = ogm.db.triples_get(
@@ -233,11 +245,24 @@ class PropertySpec:
                 f"Property {prop_iri} has multiple rdfs:range defined: {[triple[2] for triple in query_result]}"
             )
 
-        prop_range = query_result[0][2]
+        prop_range = query_result.pop()[2]
         if isinstance(prop_range, type):
-            property_spec = cls._specify_literal_property(prop_iri, prop_range)
+            if nested_scope:
+                raise ValueError(
+                    f"Property {prop_iri} cannot be part of a property chain as it has a literal range {prop_range}"
+                )
+            property_spec = cls._specify_literal_property(
+                prop_iri=prop_iri,
+                python_type=prop_range,
+            )
         elif isinstance(prop_range, IRI):
-            property_spec = cls._specify_class_property(prop_iri, prop_range)
+            property_spec = cls._specify_class_property(
+                prop_iri=prop_iri,
+                range_iri=prop_range,
+                nested_scope=nested_scope,
+                ogm=ogm,
+                hydration_level=hydration_level,
+            )
         else:
             # Is blank node: Check if valid structure for complex datatype
             query_is_complex_type = f"""
@@ -266,7 +291,10 @@ class PropertySpec:
                 }}
             """
             if ogm.db.query(query_is_complex_type).get("boolean", False):
-                property_spec = cls._specify_complex_property(ogm, prop_iri)
+                property_spec = cls._specify_complex_property(
+                    prop_iri=prop_iri,
+                    ogm=ogm,
+                )
             else:
                 raise ValueError(
                     f"Unknown property_type: {prop_range} for property {prop_iri}"
@@ -302,8 +330,22 @@ class PropertySpec:
         cls,
         prop_iri: IRI,
         range_iri: IRI,
+        nested_scope: Optional["ClassScope"],
+        ogm: "OGM",
+        hydration_level: "ClassHydrationLevel",
     ) -> PropertySpec:
-        from .class_spec import ClassSpec
+        from .class_spec import ClassSpec, ClassHydrationLevel
+
+        if nested_scope is None:
+            # No nested scope, create a minimal ClassSpec
+            nested_class_spec = ClassSpec(iri=range_iri)
+        else:
+            nested_class_spec = ClassSpec.specify(
+                ogm=ogm,
+                class_iri=range_iri,
+                class_scope=nested_scope,
+                hydration_level=hydration_level,
+            )
 
         property_spec = cls(
             iri=prop_iri,
@@ -311,21 +353,22 @@ class PropertySpec:
             python_range_type=None,  # Will be another ClassSpec
             max_count=None,
             min_count=None,
-            nested=ClassSpec(iri=range_iri),
+            nested=nested_class_spec,
         )
+
         return property_spec
 
     @classmethod
     def _specify_complex_property(
         cls,
-        ogm: "OGM",
         prop_iri: IRI,
+        ogm: "OGM",
     ) -> PropertySpec:
         """
         Processes a complex OWL property and returns a PropertySpec with a nested ClassSpec
         that includes intersection, union, complement, and enumerated restrictions.
         """
-        from .class_spec import ClassSpec
+        from .class_spec import ClassSpec, ClassHydrationLevel
 
         # Initialize top-level PropertySpec
         property_spec = cls(
@@ -383,14 +426,24 @@ class PropertySpec:
 
         if not bindings:
             # No restrictions; treat as simple object with empty ClassSpec
-            property_spec.nested = ClassSpec(iri=None, properties={}, metadata={})
             # Anonymous class is fully specified in-place
-            property_spec.nested._hydrated = True
+            property_spec.nested = ClassSpec(
+                iri=None,
+                properties={},
+                metadata={},
+                hydration_level=ClassHydrationLevel.FULL,
+            )
+
             return property_spec
 
         # Initialize nested ClassSpec for the anonymous range
+        # Anonymous class is fully specified in-place
         property_spec.nested = ClassSpec(
-            iri=None, label=None, properties={}, metadata={}  # Anonymous class
+            iri=None,
+            label=None,
+            properties={},
+            metadata={},
+            hydration_level=ClassHydrationLevel.FULL,  # Anonymous class
         )
 
         # Process each restriction
@@ -469,10 +522,5 @@ class PropertySpec:
                 property_spec.nested.metadata["oneOf"] = first_binding["oneOfList"][
                     "value"
                 ]
-
-        # Mark anonymous nested class as hydrated since it was fully built here
-        if property_spec.nested is not None:
-            property_spec.nested._hydrated = True
-
         # print(f"Complex property {prop} processed: {property_spec.to_string()}")
         return property_spec

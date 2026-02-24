@@ -1,1 +1,1 @@
-"""Unit tests for circular_factory_ogm."""
+"""Unit tests for kapps_ogm."""

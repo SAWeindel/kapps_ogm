@@ -3,7 +3,7 @@ import deepdiff
 import logging
 
 from graph_db_interface import IRI, GraphDBCredentials, GraphDB
-from circular_factory_ogm.ogm import OGM
+from kapps_ogm.ogm import OGM
 
 test_data = {
     "id": IRI(
@@ -121,7 +121,7 @@ def main():
     )
     db = GraphDB(credentials=credentials)
     db.logger.setLevel(logging.ERROR)
-    db.clear_graph()  # clear default graph before running demo
+    assert db.clear_graph()  # clear default graph before running demo
 
     ogm = OGM(db=db, loader=None)
     ogm.logger.setLevel(logging.DEBUG)

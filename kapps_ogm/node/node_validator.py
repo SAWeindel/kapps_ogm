@@ -4,11 +4,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 import logging
 
-from circular_factory_ogm.mapping.property_spec import PropertyValueKind
+from kapps_ogm.mapping.property_spec import PropertyValueKind
 
 if TYPE_CHECKING:
     from .core import Node
-    from circular_factory_ogm.mapping.class_spec import ClassSpec
+    from kapps_ogm.mapping.class_spec import ClassSpec
 
 logger = logging.getLogger("cf_node_validator")
 logger.setLevel(logging.DEBUG)
@@ -20,7 +20,6 @@ class NodeValidator:
     @staticmethod
     def validate(
         node: Node,
-        class_spec: Optional[ClassSpec] = None,
         strict: bool = False,
     ) -> None:
         """
@@ -28,8 +27,6 @@ class NodeValidator:
 
         Args:
             node: The Node instance to validate.
-            class_spec: Optional ClassSpec to use for validation. If not provided,
-                       uses the node's class_spec attribute.
             strict: If True, enforce strict validation rules. In this case, no unknown
                    properties are permitted. Defaults to False.
 
@@ -40,9 +37,7 @@ class NodeValidator:
             raise ValueError("Node does not contain data to validate")
 
         if node.class_spec is None:
-            if class_spec is None:
-                raise ValueError("Cannot validate data without ClassSpec")
-            node.class_spec = class_spec
+            raise ValueError("Cannot validate data without ClassSpec")
 
         # Check that node IRI is instance of ClassSpec IRI
         if node.id is not None and node.class_spec.iri is not None:
@@ -117,14 +112,11 @@ class NodeValidator:
 
                         if not isinstance(domain_instance, Node):
                             raise ValueError(
-                                f"Node {node.id} property {property_iri} expected Node instances, got literal"
+                                f"Node {node.id} property {property_iri} expected Node instances, got literal {domain_instance}"
                             )
                         # Recursively validate nested nodes
-                        NodeValidator.validate(
-                            domain_instance,
-                            class_spec=prop_spec.nested,
-                            strict=strict,
-                        )
+                        NodeValidator.validate(domain_instance, strict=strict)
+
                 case PropertyValueKind.LITERAL:
                     permitted_types = prop_spec.python_range_type
 

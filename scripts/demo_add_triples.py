@@ -22,12 +22,13 @@ def main():
             IRI("https://example.org/object2"),
         ),
     ]
-    db.triples_add(
+    success = db.triples_add(
         triples,
         named_graph=IRI(
             "https://www.sfb1574.kit.edu/ontologies/TransferUnitInstances_generated"
         ),
     )
+    assert success, "Failed to add triples to the database."
 
 
 if __name__ == "__main__":

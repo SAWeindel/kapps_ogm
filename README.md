@@ -1,1 +1,1 @@
-# Object-Graph-Mapper for the Circular Factory
+# Object-Graph-Mapper for KAPPS

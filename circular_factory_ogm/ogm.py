@@ -127,7 +127,9 @@ class OGM:
             if not node.has_data:
                 raise ValueError("Cannot persist a Node without data.")
             triples = node.to_triples()
-            self.db.triples_add(triples, named_graph=named_graph)
+            success = self.db.triples_add(triples, named_graph=named_graph)
+            if not success:
+                raise Exception("Failed to persist instance.")
 
         return node
 
@@ -410,11 +412,14 @@ class OGM:
             f"Updating instance {instance_iri}: removing {len(old_triples)} triples, adding {len(new_triples)} triples:\n\n--- Old triples to be deleted ---\n{format_triples_turtle(old_triples)}\n\n--- New triples to be added ---\n{format_triples_turtle(new_triples)}",
         )
 
-        self.db.triples_update(
+        success = self.db.triples_update(
             old_triples=old_triples,
             new_triples=new_triples,
             named_graph=named_graph,
         )
+
+        if not success:
+            raise ValueError("Failed to update instance in database.")
 
         return new_node
 

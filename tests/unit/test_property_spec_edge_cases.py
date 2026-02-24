@@ -228,7 +228,7 @@ class TestPropertySpecification:
         """Test that literal property without rdfs:range raises error."""
         # setup
         prop_iri = IRI("https://example.org/noRangeProp")
-        ogm.db.triples_add(
+        assert ogm.db.triples_add(
             [
                 (prop_iri, IRI("rdf:type"), IRI("owl:DatatypeProperty")),
             ]
@@ -247,7 +247,7 @@ class TestPropertySpecification:
         """Test that literal property with multiple rdfs:range raises error."""
         # Setup: Multiple ranges
         prop_iri = IRI("https://example.org/multiRangeProp")
-        ogm.db.triples_add(
+        assert ogm.db.triples_add(
             [
                 (prop_iri, IRI("rdf:type"), IRI("owl:DatatypeProperty")),
                 (prop_iri, IRI("rdfs:range"), IRI("xsd:string")),
@@ -269,7 +269,7 @@ class TestPropertySpecification:
         # Setup
         prop_iri = IRI("https://example.org/objectProp")
         target_class = IRI("https://example.org/TargetClass")
-        ogm.db.triples_add(
+        assert ogm.db.triples_add(
             [
                 (prop_iri, IRI("rdf:type"), IRI("owl:ObjectProperty")),
                 (prop_iri, IRI("rdfs:range"), target_class),
@@ -293,7 +293,7 @@ class TestPropertySpecification:
         """Test that class property without rdfs:range raises error."""
         # Setup
         prop_iri = IRI("https://example.org/noRangeProp")
-        ogm.db.triples_add(
+        assert ogm.db.triples_add(
             [
                 (prop_iri, IRI("rdf:type"), IRI("owl:ObjectProperty")),
             ]

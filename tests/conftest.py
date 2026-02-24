@@ -37,7 +37,7 @@ def db() -> GraphDB:
         "http://example.org/named_graph",
         "http://example.org/local_named_graph",
     ]:
-        db.clear_graph(graph)
+        assert db.clear_graph(graph)
 
     return db
 

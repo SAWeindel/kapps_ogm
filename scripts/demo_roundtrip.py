@@ -121,7 +121,7 @@ def main():
     )
     db = GraphDB(credentials=credentials)
     db.logger.setLevel(logging.ERROR)
-    db.clear_graph()  # clear default graph before running demo
+    assert db.clear_graph()  # clear default graph before running demo
 
     ogm = OGM(db=db, loader=None)
     ogm.logger.setLevel(logging.DEBUG)

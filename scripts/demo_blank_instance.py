@@ -4,9 +4,9 @@ import json
 
 from graph_db_interface import GraphDBCredentials, GraphDB, IRI
 
-from circular_factory_ogm.ogm import OGM
-from circular_factory_ogm.utils.class_scope import ClassScope
-from circular_factory_ogm.utils.json_ogm_encoder import OGMEncoder
+from kapps_ogm.ogm import OGM
+from kapps_ogm.utils.class_scope import ClassScope
+from kapps_ogm.utils.json_ogm_encoder import OGMEncoder
 
 
 # Original TransferUnit property chains (commented out)
@@ -34,9 +34,7 @@ property_chains = [
         IRI("http://w3id.org/circularfactory/FlexConveyor#hasDirection"),
     ],
 ]
-instance_iri = IRI(
-    "http://w3id.org/circularfactory/FlexConveyor#TestModule1"
-)
+instance_iri = IRI("http://w3id.org/circularfactory/FlexConveyor#TestModule1")
 class_iri = IRI("http://w3id.org/circularfactory/FlexConveyor#FlexConveyorModule")
 
 
@@ -66,7 +64,7 @@ def main():
 
     print("\n=== Blank Instance (Lined JSON - Python/Pydantic safe keys) ===")
     print(json.dumps(blank_instance.model_dump(), indent=4))
-    
+
     print("\n=== Blank Instance (Pretty JSON - Full IRI display) ===")
     print(json.dumps(blank_instance, indent=4, cls=OGMEncoder))
 

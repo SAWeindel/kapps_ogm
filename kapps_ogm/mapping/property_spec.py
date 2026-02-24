@@ -7,15 +7,15 @@ from graph_db_interface import IRI, XSDToPythonTypes
 import logging
 from pydantic import BeforeValidator, Field, conlist
 
-from circular_factory_ogm.utils.constants import (
+from kapps_ogm.utils.constants import (
     PROPERTY_TYPES,
     PROPERTY_CHARACTERISTICS,
 )
-from circular_factory_ogm.utils.class_scope import ClassScope
+from kapps_ogm.utils.class_scope import ClassScope
 
 if TYPE_CHECKING:
-    from circular_factory_ogm.mapping.class_spec import ClassSpec, ClassHydrationLevel
-    from circular_factory_ogm.ogm import OGM
+    from kapps_ogm.mapping.class_spec import ClassSpec, ClassHydrationLevel
+    from kapps_ogm.ogm import OGM
 
 logger = logging.getLogger("cf_pspec")
 logger.setLevel(logging.DEBUG)
@@ -93,7 +93,7 @@ class PropertySpec:
                         if isinstance(value, nested_model):
                             return value
                         try:
-                            from circular_factory_ogm.node.core import (
+                            from kapps_ogm.node.core import (
                                 Node,
                             )  # Lazy import to avoid cycles
                         except Exception:
@@ -132,7 +132,7 @@ class PropertySpec:
                         if isinstance(value, nested_model):
                             return value
                         try:
-                            from circular_factory_ogm.node.core import (
+                            from kapps_ogm.node.core import (
                                 Node,
                             )  # Lazy import to avoid cycles
                         except Exception:

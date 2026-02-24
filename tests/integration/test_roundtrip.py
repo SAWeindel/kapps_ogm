@@ -4,8 +4,8 @@ import pytest
 import deepdiff
 
 from graph_db_interface import IRI
-from circular_factory_ogm.ogm import OGM
-from circular_factory_ogm.utils.class_scope import ClassScope
+from kapps_ogm.ogm import OGM
+from kapps_ogm.utils.class_scope import ClassScope
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "test_data")
 

@@ -2,7 +2,7 @@ import pytest
 from deepdiff import DeepDiff
 
 from graph_db_interface import IRI
-from circular_factory_ogm.utils.class_scope import ClassScope
+from kapps_ogm.utils.class_scope import ClassScope
 
 
 @pytest.fixture
@@ -232,7 +232,7 @@ class TestClassScopeFromNodeData:
 
     def test_from_node_data(self):
         """Test creating ClassScope from simple Node data."""
-        from circular_factory_ogm.node.core import Node
+        from kapps_ogm.node.core import Node
 
         node1 = Node(data=self.data1)
         scope1 = ClassScope.from_node_data(node1)

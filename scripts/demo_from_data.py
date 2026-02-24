@@ -6,9 +6,9 @@ import json
 
 from graph_db_interface import GraphDBCredentials, GraphDB, IRI
 
-from circular_factory_ogm.node.core import Node
-from circular_factory_ogm.ogm import OGM
-from circular_factory_ogm.utils.class_scope import ClassScope
+from kapps_ogm.node.core import Node
+from kapps_ogm.ogm import OGM
+from kapps_ogm.utils.class_scope import ClassScope
 
 PATH = os.path.dirname(os.path.abspath(__file__))
 

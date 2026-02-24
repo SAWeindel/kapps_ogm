@@ -1,6 +1,6 @@
 {
   "$defs": {
-    "circular_factory_ogm__builders__mapping__class_spec__AnonymousClass__1": {
+    "kapps_ogm__builders__mapping__class_spec__AnonymousClass__1": {
       "properties": {
         "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasValue": {
           "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
@@ -24,7 +24,7 @@
       "title": "AnonymousClass",
       "type": "object"
     },
-    "circular_factory_ogm__builders__mapping__class_spec__AnonymousClass__2": {
+    "kapps_ogm__builders__mapping__class_spec__AnonymousClass__2": {
       "properties": {
         "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasUnit": {
           "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasUnit",
@@ -48,7 +48,7 @@
       "title": "AnonymousClass",
       "type": "object"
     },
-    "circular_factory_ogm__builders__mapping__class_spec__AnonymousClass__3": {
+    "kapps_ogm__builders__mapping__class_spec__AnonymousClass__3": {
       "properties": {
         "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_inf_h_hasValue": {
           "description": "PropertySpec for https://www.sfb1574.kit.edu/ontologies/inf#hasValue",
@@ -78,7 +78,7 @@
           "anyOf": [
             {
               "items": {
-                "$ref": "#/$defs/circular_factory_ogm__builders__mapping__class_spec__AnonymousClass__1"
+                "$ref": "#/$defs/kapps_ogm__builders__mapping__class_spec__AnonymousClass__1"
               },
               "type": "array"
             },
@@ -94,7 +94,7 @@
           "anyOf": [
             {
               "items": {
-                "$ref": "#/$defs/circular_factory_ogm__builders__mapping__class_spec__AnonymousClass__2"
+                "$ref": "#/$defs/kapps_ogm__builders__mapping__class_spec__AnonymousClass__2"
               },
               "type": "array"
             },
@@ -116,7 +116,7 @@
           "anyOf": [
             {
               "items": {
-                "$ref": "#/$defs/circular_factory_ogm__builders__mapping__class_spec__AnonymousClass__3"
+                "$ref": "#/$defs/kapps_ogm__builders__mapping__class_spec__AnonymousClass__3"
               },
               "type": "array"
             },

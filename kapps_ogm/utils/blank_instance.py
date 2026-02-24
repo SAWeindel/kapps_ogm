@@ -5,12 +5,12 @@ import pydantic as pd
 
 from graph_db_interface import IRI
 
-from circular_factory_ogm.mapping.class_spec import ClassSpec, ClassHydrationLevel
-from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
-from circular_factory_ogm.utils.class_scope import ClassScope
+from kapps_ogm.mapping.class_spec import ClassSpec, ClassHydrationLevel
+from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
+from kapps_ogm.utils.class_scope import ClassScope
 
 if TYPE_CHECKING:
-    from circular_factory_ogm.ogm import OGM
+    from kapps_ogm.ogm import OGM
 
 
 def _blank_value_for_property(ogm: "OGM", prop: PropertySpec) -> Any:

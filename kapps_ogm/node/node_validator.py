@@ -4,11 +4,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 import logging
 
-from circular_factory_ogm.mapping.property_spec import PropertyValueKind
+from kapps_ogm.mapping.property_spec import PropertyValueKind
 
 if TYPE_CHECKING:
     from .core import Node
-    from circular_factory_ogm.mapping.class_spec import ClassSpec
+    from kapps_ogm.mapping.class_spec import ClassSpec
 
 logger = logging.getLogger("cf_node_validator")
 logger.setLevel(logging.DEBUG)

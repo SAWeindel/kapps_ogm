@@ -13,9 +13,9 @@ from unittest.mock import Mock, patch
 from pydantic import ValidationError, BaseModel
 
 from graph_db_interface import IRI
-from circular_factory_ogm.node.core import Node
-from circular_factory_ogm.mapping.class_spec import ClassSpec
-from circular_factory_ogm.mapping.property_spec import PropertySpec
+from kapps_ogm.node.core import Node
+from kapps_ogm.mapping.class_spec import ClassSpec
+from kapps_ogm.mapping.property_spec import PropertySpec
 
 from .conftest import (
     TRANSFER_UNIT_IRI,

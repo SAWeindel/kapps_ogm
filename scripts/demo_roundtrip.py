@@ -3,7 +3,7 @@ import deepdiff
 import logging
 
 from graph_db_interface import IRI, GraphDBCredentials, GraphDB
-from circular_factory_ogm.ogm import OGM
+from kapps_ogm.ogm import OGM
 
 test_data = {
     "id": IRI(

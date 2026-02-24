@@ -12,14 +12,14 @@ from graph_db_interface import IRI
 from graph_db_interface.utils import utils
 from graph_db_interface.utils.types import IRILike, Triple
 
-from circular_factory_ogm.mapping.property_spec import PropertyValueKind
+from kapps_ogm.mapping.property_spec import PropertyValueKind
 
 from .node_validator import NodeValidator
 from .node_data_formatter import sanitize_data, format_for_instance
 
 if TYPE_CHECKING:
-    from circular_factory_ogm.mapping.class_spec import ClassSpec
-    from circular_factory_ogm.ogm import OGM
+    from kapps_ogm.mapping.class_spec import ClassSpec
+    from kapps_ogm.ogm import OGM
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -314,7 +314,7 @@ class Node:
     def log_data_debug(self) -> None:
         """Pretty print data for debugging."""
         if logger.isEnabledFor(logging.DEBUG) and self.data:
-            from circular_factory_ogm.utils.pretty_print import format_node_data
+            from kapps_ogm.utils.pretty_print import format_node_data
 
             logger.debug(json.dumps(format_node_data(self.data), indent=2))
 

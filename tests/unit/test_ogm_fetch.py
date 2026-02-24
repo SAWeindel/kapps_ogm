@@ -9,9 +9,9 @@ Tests Phase 1.1: Database Loading & Fetching
 
 from unittest.mock import Mock, patch
 
-from circular_factory_ogm.node.core import Node
-from circular_factory_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
-from circular_factory_ogm.utils.class_scope import ClassScope
+from kapps_ogm.node.core import Node
+from kapps_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
+from kapps_ogm.utils.class_scope import ClassScope
 
 from .conftest import (
     TRANSFER_UNIT_IRI,

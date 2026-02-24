@@ -5,11 +5,11 @@ import json
 
 from graph_db_interface import GraphDBCredentials, GraphDB, IRI
 
-from circular_factory_ogm.node.core import Node
-from circular_factory_ogm.ogm import OGM
-from circular_factory_ogm.utils.json_ogm_encoder import OGMEncoder
-from circular_factory_ogm.utils.pretty_print import format_triples_turtle
-from circular_factory_ogm.utils.class_scope import ClassScope
+from kapps_ogm.node.core import Node
+from kapps_ogm.ogm import OGM
+from kapps_ogm.utils.json_ogm_encoder import OGMEncoder
+from kapps_ogm.utils.pretty_print import format_triples_turtle
+from kapps_ogm.utils.class_scope import ClassScope
 
 
 class_iri = IRI("https://www.sfb1574.kit.edu/ontologies/TransferUnit#TransferUnit")

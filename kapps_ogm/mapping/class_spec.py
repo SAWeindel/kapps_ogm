@@ -10,12 +10,12 @@ from pydantic import ConfigDict  # Pydantic v2
 
 
 from graph_db_interface import IRI
-from circular_factory_ogm.utils.pretty_print import format_class_spec
-from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
-from circular_factory_ogm.utils.class_scope import ClassScope
+from kapps_ogm.utils.pretty_print import format_class_spec
+from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
+from kapps_ogm.utils.class_scope import ClassScope
 
 if TYPE_CHECKING:
-    from circular_factory_ogm.ogm import OGM
+    from kapps_ogm.ogm import OGM
 
 logger = logging.getLogger("cf_cspec")
 logger.setLevel(logging.DEBUG)

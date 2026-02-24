@@ -1,6 +1,6 @@
 {
   "$defs": {
-    "circular_factory_ogm__mapping__class_spec__AnonymousClass__1": {
+    "kapps_ogm__mapping__class_spec__AnonymousClass__1": {
       "additionalProperties": false,
       "properties": {
         "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": {
@@ -25,7 +25,7 @@
       "title": "AnonymousClass",
       "type": "object"
     },
-    "circular_factory_ogm__mapping__class_spec__AnonymousClass__2": {
+    "kapps_ogm__mapping__class_spec__AnonymousClass__2": {
       "additionalProperties": false,
       "properties": {
         "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": {
@@ -50,7 +50,7 @@
       "title": "AnonymousClass",
       "type": "object"
     },
-    "circular_factory_ogm__mapping__class_spec__AnonymousClass__3": {
+    "kapps_ogm__mapping__class_spec__AnonymousClass__3": {
       "additionalProperties": false,
       "properties": {
         "https_c__s__s_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_CrcInterfaces_h_hasValue": {
@@ -78,7 +78,7 @@
           "anyOf": [
             {
               "items": {
-                "$ref": "#/$defs/circular_factory_ogm__mapping__class_spec__AnonymousClass__1"
+                "$ref": "#/$defs/kapps_ogm__mapping__class_spec__AnonymousClass__1"
               },
               "type": "array"
             },
@@ -94,7 +94,7 @@
           "anyOf": [
             {
               "items": {
-                "$ref": "#/$defs/circular_factory_ogm__mapping__class_spec__AnonymousClass__2"
+                "$ref": "#/$defs/kapps_ogm__mapping__class_spec__AnonymousClass__2"
               },
               "type": "array"
             },
@@ -140,7 +140,7 @@
           "anyOf": [
             {
               "items": {
-                "$ref": "#/$defs/circular_factory_ogm__mapping__class_spec__AnonymousClass__3"
+                "$ref": "#/$defs/kapps_ogm__mapping__class_spec__AnonymousClass__3"
               },
               "type": "array"
             },

@@ -12,7 +12,7 @@ from unittest.mock import Mock
 from pydantic import BaseModel
 
 from graph_db_interface import IRI
-from circular_factory_ogm.node.core import Node
+from kapps_ogm.node.core import Node
 
 from .conftest import (
     INSTANCE_IRI,

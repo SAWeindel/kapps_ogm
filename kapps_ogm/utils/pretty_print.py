@@ -1,8 +1,8 @@
 from typing import TYPE_CHECKING, Any, Dict, List
 
 if TYPE_CHECKING:
-    from circular_factory_ogm.mapping.property_spec import PropertySpec
-    from circular_factory_ogm.mapping.class_spec import ClassSpec
+    from kapps_ogm.mapping.property_spec import PropertySpec
+    from kapps_ogm.mapping.class_spec import ClassSpec
 
 
 def format_triples_turtle(triples) -> str:

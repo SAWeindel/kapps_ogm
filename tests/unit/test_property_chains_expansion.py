@@ -18,7 +18,7 @@ Both should:
 import pytest
 
 from graph_db_interface import IRI
-from circular_factory_ogm.node.core import Node
+from kapps_ogm.node.core import Node
 
 
 # =====================================================================

@@ -8,7 +8,7 @@ from graph_db_interface import IRI
 
 if TYPE_CHECKING:
     from .core import Node
-    from circular_factory_ogm.ogm import OGM
+    from kapps_ogm.ogm import OGM
 
 logger = logging.getLogger("cf_node_formatter")
 logger.setLevel(logging.DEBUG)

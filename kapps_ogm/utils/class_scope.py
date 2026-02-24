@@ -6,7 +6,7 @@ from graph_db_interface import IRI
 from graph_db_interface.utils.types import IRILike
 
 if TYPE_CHECKING:
-    from circular_factory_ogm.node.core import Node
+    from kapps_ogm.node.core import Node
 
 
 class ClassScope(dict[IRI, "ClassScope"]):
@@ -17,7 +17,7 @@ class ClassScope(dict[IRI, "ClassScope"]):
 
     @classmethod
     def from_node_data(cls, node: "Node") -> ClassScope:
-        from circular_factory_ogm.node.core import Node
+        from kapps_ogm.node.core import Node
 
         def chains_from_node_data(node: Node) -> list[list[IRI]]:
             if not isinstance(node, Node) or not node.data:

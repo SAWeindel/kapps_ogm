@@ -7,13 +7,13 @@ import pydantic as pd
 from graph_db_interface import GraphDB, IRI
 from graph_db_interface.utils.types import GraphNameLike
 
-from circular_factory_ogm.node.core import Node
-from circular_factory_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
-from circular_factory_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
-from circular_factory_ogm.utils.blank_instance import _create_blank_instance
-from circular_factory_ogm.utils.loader_strategy import LoaderStrategy
-from circular_factory_ogm.utils.class_scope import ClassScope
-from circular_factory_ogm.utils.pretty_print import format_triples_turtle
+from kapps_ogm.node.core import Node
+from kapps_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
+from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
+from kapps_ogm.utils.blank_instance import _create_blank_instance
+from kapps_ogm.utils.loader_strategy import LoaderStrategy
+from kapps_ogm.utils.class_scope import ClassScope
+from kapps_ogm.utils.pretty_print import format_triples_turtle
 
 
 class OGM:
@@ -400,7 +400,7 @@ class OGM:
         old_triples, new_triples = old_node.diff(other=new_node)
 
         import json
-        from circular_factory_ogm.utils.json_ogm_encoder import OGMEncoder
+        from kapps_ogm.utils.json_ogm_encoder import OGMEncoder
 
         print("\n--- Old data --- \n")
         print(json.dumps(old_node.to_json_ld(), indent=2, cls=OGMEncoder))

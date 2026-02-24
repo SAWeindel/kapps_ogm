@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kapps-ogm"
-version = "0.0.1"
-description = "Object-Graph-Mapper for the Circular Factory."
+version = "0.1.0"
+description = "Object-Graph-Mapper for KAPPS."
 authors = [
     {name = "Etienne Hoffmann", email = "etienne.hoffmann@kit.edu"},
     {name = "Sören Weindel", email = "soeren.weindel@kit.edu"}
@@ -18,6 +18,12 @@ dependencies = [
     "graph_db_interface>=1.2.0",
     "aas_middleware>=0.0.1",
 ]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
 
 [project.optional-dependencies]
 dev = [

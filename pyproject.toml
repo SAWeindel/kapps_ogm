@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kapps-ogm"
-version = "0.1.0"
+version = "0.1.1"
 description = "Object-Graph-Mapper for KAPPS."
 authors = [
     {name = "Etienne Hoffmann", email = "etienne.hoffmann@kit.edu"},

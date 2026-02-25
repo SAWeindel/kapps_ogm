@@ -17,5 +17,3 @@ build/
 !*.ttl
 !*.triples
 !*.txt
-!*.whl
-!*.tar.gz

@@ -229,7 +229,6 @@ class OGM:
         instance_iri: IRI,
         property_spec: PropertySpec,
         nested_class_scope: Optional[ClassScope],
-        materialize: bool,
     ) -> list[Node]:
         # Query all instances of the property
         triples = self.db.triples_get(sub=instance_iri, pred=property_spec.iri)
@@ -249,7 +248,6 @@ class OGM:
                 class_spec=property_spec.nested,
                 class_scope=nested_class_scope,
                 as_reference=as_reference,
-                materialize=materialize,
             )
             property_data.append(nested_instance)
 
@@ -321,7 +319,6 @@ class OGM:
                             instance_iri=instance_iri,
                             property_spec=property_spec,
                             nested_class_scope=class_scope.get(prop, None),
-                            materialize=materialize,
                         )
                     case _:
                         raise ValueError(

@@ -179,6 +179,7 @@ class ClassSpec:
         class_spec = cls(
             iri=class_iri,
             types=class_types,
+            hydration_level=hydration_level,
         )
 
         # Get the (first) label of the class
@@ -217,25 +218,18 @@ class ClassSpec:
         if superclasses:
             class_spec.superclasses = superclasses
 
+        # skip property hydration if only reference is needed or desired class_scope is empty
+        if hydration_level is ClassHydrationLevel.REFERENCE or (
+            hydration_level is ClassHydrationLevel.SCOPE and not class_scope
+        ):
+            return class_spec
+
         ### Build property specs of the class
-        class_spec.properties = {}
-
-        # inherit properties from superclasses
-        for sc in superclasses:
-            # Always resolve superclasses fully
-            sc_spec = ClassSpec.specify(
-                class_iri=sc,
-                ogm=ogm,
-                hydration_level=ClassHydrationLevel.FULL,
+        if hydration_level is ClassHydrationLevel.SCOPE and class_scope is None:
+            raise ValueError(
+                "ClassScope must be provided when hydration_level is 'SCOPE'."
             )
-            duplicated_props = class_spec.properties.keys() & sc_spec.properties.keys()
-            if duplicated_props:
-                logger.warning(
-                    f"Properties {duplicated_props} of {class_iri} are defined in multiple superclasses."
-                )
-            class_spec.properties.update(sc_spec.properties)
 
-        # own properties override inherited ones
         query = f"""
             PREFIX onto: <http://www.ontotext.com/>
             PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -244,45 +238,43 @@ class ClassSpec:
             FROM onto:explicit
             WHERE {{
                 {{
-                    ?property rdfs:domain <{class_iri}> .
+                    ?property rdfs:domain ?class .
                 }}
                 UNION
                 {{
                     ?property rdfs:domain ?union_class .
                     ?union_class owl:unionOf ?list .
-                    ?list rdf:rest*/rdf:first <{class_iri}> .
-                    
-                }}
+                    ?list rdf:rest*/rdf:first ?class .
+                }} .
+                <{class_iri}> rdfs:subClassOf* ?class.
             }}
         """
         query_result = db.query(query, convert_bindings=True)
-        properties = (
+        property_list = [
             b["property"] for b in query_result.get("results", {}).get("bindings", [])
-        )
+        ]
+        properties = set(property_list)
+        if len(property_list) != len(properties):
+            logger.warning(
+                f"Properties of {class_iri} contain duplicates, likely due to multiple superclasses defining the same property: {properties}"
+            )
+
+        if hydration_level is ClassHydrationLevel.SCOPE:
+            expected_properties = set(class_scope.keys())
+            missing_properties = expected_properties - properties
+            if missing_properties:
+                raise ValueError(
+                    f"Properties {missing_properties} specified in class scope, but not found as property of class {class_spec.iri}."
+                )
+            properties = expected_properties
 
         for prop in properties:
-            if (hydration_level is ClassHydrationLevel.REFERENCE) or (
-                hydration_level is ClassHydrationLevel.SCOPE and not prop in class_scope
-            ):
-                logger.debug(
-                    f"Skipping property {prop} of class {class_iri} as hydration_level is '{hydration_level.name}' and prop in class scope is '{prop in class_scope}'."
-                )
-                continue  # skip properties if not explicitly requested
+            nested_scope = class_scope.get(prop, None) if class_scope else None
             class_spec.properties[prop] = PropertySpec.specify(
                 prop_iri=prop,
-                nested_scope=class_scope.get(prop, None),
+                nested_scope=nested_scope,
                 ogm=ogm,
                 hydration_level=hydration_level,
             )
-
-        missing_properties = set(class_scope.keys()) - set(class_spec.properties.keys())
-        if missing_properties:
-            raise ValueError(
-                f"Properties {missing_properties} specified in class scope, but not found as property of class {class_spec.iri}."
-            )
-
-        # Mark as hydrated if it was fully specified. If hydration_level is below FULL,
-        # we cannot guarantee that all properties have been resolved.
-        class_spec.hydration_level = hydration_level
 
         return class_spec

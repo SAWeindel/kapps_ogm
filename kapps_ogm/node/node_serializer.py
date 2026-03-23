@@ -284,10 +284,17 @@ def _value_to_triples(
             return triples
 
         # Recurse - nested object serializes its own properties
+        property_spec = (
+            self.class_spec.properties.get(predicate, None) if self.class_spec else None
+        )
+        class_spec = (
+            property_spec.nested if (property_spec and property_spec.nested) else None
+        )
+
         nested_node = Node(
             id=obj,
             instance=value,
-            class_spec=None,  # Properties encoded in Pydantic model
+            class_spec=class_spec,  # Properties encoded in Pydantic model
             ogm=self.ogm,
         )
         triples |= to_triples(nested_node)

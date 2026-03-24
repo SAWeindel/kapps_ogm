@@ -17,8 +17,8 @@ if TYPE_CHECKING:
     from kapps_ogm.mapping.class_spec import ClassSpec, ClassHydrationLevel
     from kapps_ogm.ogm import OGM
 
-logger = logging.getLogger("cf_pspec")
-logger.setLevel(logging.DEBUG)
+logger = logging.getLogger("kapps_pspec")
+logger.setLevel(logging.INFO)
 
 
 class PropertyValueKind(Enum):

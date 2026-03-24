@@ -53,7 +53,7 @@ from kapps_ogm.utils.class_scope import ClassScope
 #     fc:connectsTo fci:Module1 .
 
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 credentials = GraphDBCredentials(
     base_url="https://graphdb.iam-mms.kit.edu/",

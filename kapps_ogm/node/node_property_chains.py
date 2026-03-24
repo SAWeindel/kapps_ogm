@@ -10,8 +10,8 @@ from graph_db_interface.exceptions import InvalidIRIError
 if TYPE_CHECKING:
     from .core import Node
 
-logger = logging.getLogger("cf_node_chains")
-logger.setLevel(logging.DEBUG)
+logger = logging.getLogger("kapps_node_chains")
+logger.setLevel(logging.INFO)
 
 
 def extract_property_chains(self: "Node") -> list[list[IRI | str]]:

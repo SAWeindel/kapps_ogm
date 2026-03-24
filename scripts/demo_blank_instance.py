@@ -40,7 +40,7 @@ class_iri = IRI("http://w3id.org/circularfactory/FlexConveyor#FlexConveyorModule
 
 def main():
     logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
 
     credentials = GraphDBCredentials(
         base_url="https://graphdb.iam-mms.kit.edu/",

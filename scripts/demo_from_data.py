@@ -129,7 +129,7 @@ def _scope_from_data(ogm: OGM, data: dict) -> ClassScope:
 
 def main():
     logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
 
     credentials = GraphDBCredentials(
         base_url="https://graphdb.iam-mms.kit.edu/",
@@ -140,7 +140,7 @@ def main():
     db = GraphDB(credentials=credentials)
     # db.logger.setLevel(logging.DEBUG)
     ogm = OGM(db=db)
-    ogm.logger.setLevel(logging.DEBUG)
+    ogm.logger.setLevel(logging.INFO)
 
     print("Clearing default graph...")
     cleared = db.clear_graph()

@@ -57,7 +57,7 @@ def _scope_from_data(ogm: OGM, data: dict) -> ClassScope:
 
 def main():
     logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
 
     credentials = GraphDBCredentials(
         base_url="https://graphdb.iam-mms.kit.edu/",

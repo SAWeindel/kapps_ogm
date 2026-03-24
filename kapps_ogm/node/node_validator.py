@@ -10,8 +10,8 @@ if TYPE_CHECKING:
     from .core import Node
     from kapps_ogm.mapping.class_spec import ClassSpec
 
-logger = logging.getLogger("cf_node_validator")
-logger.setLevel(logging.DEBUG)
+logger = logging.getLogger("kapps_node_validator")
+logger.setLevel(logging.INFO)
 
 
 class NodeValidator:

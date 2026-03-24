@@ -38,8 +38,8 @@ class OGM:
         self.db = db
         self.loader = loader
         self.naming_schema = naming_schema
-        self.logger = logger or logging.getLogger("cf_ogm")
-        self.logger.setLevel(logging.DEBUG)
+        self.logger = logger or logging.getLogger("kapps_ogm")
+        self.logger.setLevel(logging.INFO)
 
     # ------------------------------------------------------------------
     # Schema orchestration

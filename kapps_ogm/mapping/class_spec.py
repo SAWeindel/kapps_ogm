@@ -17,8 +17,8 @@ from kapps_ogm.utils.class_scope import ClassScope
 if TYPE_CHECKING:
     from kapps_ogm.ogm import OGM
 
-logger = logging.getLogger("cf_cspec")
-logger.setLevel(logging.DEBUG)
+logger = logging.getLogger("kapps_cspec")
+logger.setLevel(logging.INFO)
 
 
 class ClassHydrationLevel(Enum):

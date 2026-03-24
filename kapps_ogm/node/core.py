@@ -23,8 +23,8 @@ if TYPE_CHECKING:
 
 T = TypeVar("T", bound=BaseModel)
 
-logger = logging.getLogger("cf_node")
-logger.setLevel(logging.DEBUG)
+logger = logging.getLogger("kapps_node")
+logger.setLevel(logging.INFO)
 
 
 class Node:

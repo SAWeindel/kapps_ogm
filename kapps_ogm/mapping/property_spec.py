@@ -334,18 +334,14 @@ class PropertySpec:
         ogm: "OGM",
         hydration_level: "ClassHydrationLevel",
     ) -> PropertySpec:
-        from .class_spec import ClassSpec, ClassHydrationLevel
+        from .class_spec import ClassSpec
 
-        if nested_scope is None:
-            # No nested scope, create a minimal ClassSpec
-            nested_class_spec = ClassSpec(iri=range_iri)
-        else:
-            nested_class_spec = ClassSpec.specify(
-                ogm=ogm,
-                class_iri=range_iri,
-                class_scope=nested_scope,
-                hydration_level=hydration_level,
-            )
+        nested_class_spec = ClassSpec.specify(
+            ogm=ogm,
+            class_iri=range_iri,
+            class_scope=nested_scope,
+            hydration_level=hydration_level,
+        )
 
         property_spec = cls(
             iri=prop_iri,

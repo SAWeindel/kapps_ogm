@@ -315,10 +315,13 @@ class OGM:
                             property_iri=property_spec.iri,
                         )
                     case PropertyValueKind.OBJECT:
+                        nested_class_scope = (
+                            class_scope.get(prop, None) if class_scope else None
+                        )
                         property_data = self._fetch_object_property(
                             instance_iri=instance_iri,
                             property_spec=property_spec,
-                            nested_class_scope=class_scope.get(prop, None),
+                            nested_class_scope=nested_class_scope,
                         )
                     case _:
                         raise ValueError(

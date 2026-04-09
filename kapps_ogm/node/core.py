@@ -198,6 +198,7 @@ class Node:
         )
         unknown_properties = data_properties - spec_properties
         if unknown_properties:
+            # TODO This error is thrown before self.__repr__ is possible, as self.instance is not yet set.
             raise ValueError(
                 f"Node {self} data contains OBJECT or COMPLEX properties not defined in ClassSpec {class_spec}: {unknown_properties}"
             )

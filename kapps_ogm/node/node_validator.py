@@ -100,12 +100,6 @@ class NodeValidator:
             # Check type
             match prop_spec.value_kind:
                 case PropertyValueKind.OBJECT | PropertyValueKind.COMPLEX:
-                    # TODO Add checks for owl:allValuesFrom and owl:someValuesFrom for object properties.
-                    # Maybe collect set of failed and passed checks?
-                    # logger.info(
-                    #     f"Cardinality checks for object properties ({property_iri}) not implemented yet."
-                    # )
-
                     for domain_instance in domain_list:
                         # Import here to avoid circular dependency
                         from .core import Node

@@ -320,9 +320,6 @@ class PropertySpec:
             min_count=None,
             nested=None,
         )
-        # logger.warning(
-        #     f"Warning: The property {prop_iri} has not been checked for OWL constraints yet. You might want to verify cardinality and existential constraints."
-        # )
         return property_spec
 
     @classmethod

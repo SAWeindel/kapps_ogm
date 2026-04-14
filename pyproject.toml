@@ -1,40 +1,33 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
 
-[project]
+[tool.poetry]
 name = "kapps-ogm"
 version = "0.1.2"
 description = "Object-Graph-Mapper for KAPPS."
 authors = [
-    {name = "Etienne Hoffmann", email = "etienne.hoffmann@kit.edu"},
-    {name = "Sören Weindel", email = "soeren.weindel@kit.edu"}
+    "Etienne Hoffmann <etienne.hoffmann@kit.edu>",
+    "Sören Weindel <soeren.weindel@kit.edu>"
 ]
 readme = "README.md"
-requires-python = ">=3.12"
-dependencies = [
-    "rdflib>=7.1.3",
-    "pydantic>=2.12.4",
-    "graph_db_interface>=1.2.0",
-    "aas_middleware>=0.0.1",
-]
+license = "MIT"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
-license = "MIT"
-license-files = ["LICEN[CS]E*"]
 
-[project.optional-dependencies]
-dev = [
-    "black>=25.1.0",
-    "pytest>=8.2.0",
-    "pylint>=3.3.4",
-]
+[tool.poetry.dependencies]
+python = "^3.12"
+rdflib = "^7.1.3"
+pydantic = "^2.12.4"
+graph_db_interface = "^1.2.0"
+aas_middleware = "^0.0.1"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["kapps_ogm*"]
+[tool.poetry.group.dev.dependencies]
+black = "^25.1.0"
+pytest = "^8.2.0"
+pylint = "^3.3.4"
 
 [tool.pylint."MESSAGES CONTROL"]
 disable = [

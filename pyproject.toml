@@ -21,8 +21,7 @@ classifiers = [
 python = "^3.12"
 rdflib = "^7.1.3"
 pydantic = "^2.12.4"
-graph_db_interface = "^2.0.1"
-aas_middleware = "^0.0.1"
+graph_db_interface = {git = "https://github.com/SAWeindel/graph_db_interface.git", branch = "hackathon"}
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"

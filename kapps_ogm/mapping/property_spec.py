@@ -216,10 +216,10 @@ class PropertySpec:
         hydration_level: "ClassHydrationLevel",
     ) -> PropertySpec:
         # Categorize the property regarding its type and characteristics
-        query_result = ogm.db.triples_get(
-            sub=prop_iri, pred="rdf:type", include_implicit=False
+        type_query_result = ogm.db.triples_get(
+            sub=prop_iri, pred="rdf:type", include_implicit=True
         )
-        property_types = [triple[2] for triple in query_result]
+        property_types = [triple[2] for triple in type_query_result]
 
         if not property_types:
             raise ValueError(f"Property {prop_iri} has no rdf:type defined.")
@@ -234,18 +234,18 @@ class PropertySpec:
                 characteristics.append(PROPERTY_CHARACTERISTICS[ptype])
 
         # Determine the property specification based on its range
-        query_result = ogm.db.triples_get(
+        range_query_result = ogm.db.triples_get(
             sub=prop_iri, pred="rdfs:range", include_implicit=True
         )
 
-        if len(query_result) == 0:
+        if len(range_query_result) == 0:
             raise ValueError(f"Property {prop_iri} has no rdfs:range defined.")
-        elif len(query_result) > 1:
+        elif len(range_query_result) > 1:
             raise ValueError(
-                f"Property {prop_iri} has multiple rdfs:range defined: {[triple[2] for triple in query_result]}"
+                f"Property {prop_iri} has multiple rdfs:range defined: {[triple[2] for triple in range_query_result]}"
             )
 
-        prop_range = query_result.pop()[2]
+        prop_range = range_query_result.pop()[2]
         if isinstance(prop_range, type):
             if nested_scope:
                 raise ValueError(

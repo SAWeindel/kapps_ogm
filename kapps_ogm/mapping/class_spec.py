@@ -211,10 +211,6 @@ class ClassSpec:
         superclasses = [triple[2] for triple in superclass_triples]
         if class_iri in superclasses:
             superclasses.remove(class_iri)
-        else:
-            logger.warning(
-                f"{class_iri} should be implicitely a subclass of itself but is not found in rdfs:subClassOf."
-            )
         if superclasses:
             class_spec.superclasses = superclasses
 

@@ -400,16 +400,7 @@ class OGM:
 
         old_triples, new_triples = old_node.diff(other=new_node)
 
-        import json
-        from kapps_ogm.utils.json_ogm_encoder import OGMEncoder
-
-        print("\n--- Old data --- \n")
-        print(json.dumps(old_node.to_json_ld(), indent=2, cls=OGMEncoder))
-
-        print("\n--- New data --- \n")
-        print(json.dumps(new_node.to_json_ld(), indent=2, cls=OGMEncoder))
-
-        print(
+        self.logger.info(
             f"Updating instance {instance_iri}: removing {len(old_triples)} triples, adding {len(new_triples)} triples:\n\n--- Old triples to be deleted ---\n{format_triples_turtle(old_triples)}\n\n--- New triples to be added ---\n{format_triples_turtle(new_triples)}",
         )
 

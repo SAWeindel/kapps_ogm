@@ -60,7 +60,24 @@ def main():
     ogm = OGM(db=db)
     instance_iri = setup_demo(ogm)
 
-    class_scope = ClassScope.from_data_dict(initial_data)
+    property_chains = [
+        [
+            IRI("hasConveyorBelt", DEMO),
+            IRI("isWorking", DEMO),
+        ],
+        [
+            IRI("hasConveyorBelt", DEMO),
+            IRI("hasConveyorPosition", DEMO),
+            IRI("hasValue", DEMO),
+        ],
+        [
+            IRI("hasConveyorBelt", DEMO),
+            IRI("hasConveyorPosition", DEMO),
+            IRI("hasUnit", DEMO),
+        ],
+    ]
+
+    class_scope = ClassScope.from_property_chains(property_chains)
 
     # --- 1. Fetch the instance from the DB ---
     fetched_node = ogm.fetch(

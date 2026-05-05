@@ -6,54 +6,45 @@
 
 # ── Ontology declaration ────────────────────────────────────────────────────
 
-<http://demo.org/TransferUnit>
-    a owl:Ontology ;
+demo: rdf:type owl:Ontology ;
     rdfs:label "TransferUnit demo ontology" .
 
 # ── Classes ─────────────────────────────────────────────────────────────────
 
-demo:TransferUnit
-    a owl:Class ;
+demo:TransferUnit rdf:type owl:Class ;
     rdfs:label "Transfer Unit" .
 
-demo:ConveyorBelt
-    a owl:Class ;
+demo:ConveyorBelt rdf:type owl:Class ;
     rdfs:label "Conveyor Belt" .
 
-demo:ConveyorPosition
-    a owl:Class ;
+demo:ConveyorPosition rdf:type owl:Class ;
     rdfs:label "Conveyor Position" .
 
 # ── Object properties ────────────────────────────────────────────────────────
 
-demo:hasConveyorBelt
-    a owl:ObjectProperty ;
+demo:hasConveyorBelt rdf:type owl:ObjectProperty ;
     rdfs:label "has conveyor belt" ;
     rdfs:domain demo:TransferUnit ;
     rdfs:range  demo:ConveyorBelt .
 
-demo:hasConveyorPosition
-    a owl:ObjectProperty ;
+demo:hasConveyorPosition rdf:type owl:ObjectProperty ;
     rdfs:label "has conveyor position" ;
     rdfs:domain demo:ConveyorBelt ;
     rdfs:range  demo:ConveyorPosition .
 
 # ── Datatype properties ──────────────────────────────────────────────────────
 
-demo:isWorking
-    a owl:DatatypeProperty ;
+demo:isWorking rdf:type owl:DatatypeProperty ;
     rdfs:label "is working" ;
     rdfs:domain demo:ConveyorBelt ;
     rdfs:range  xsd:boolean .
 
-demo:hasUnit
-    a owl:DatatypeProperty ;
+demo:hasUnit rdf:type owl:DatatypeProperty ;
     rdfs:label "has unit" ;
     rdfs:domain demo:ConveyorPosition ;
     rdfs:range  xsd:string .
 
-demo:hasValue
-    a owl:DatatypeProperty ;
+demo:hasValue rdf:type owl:DatatypeProperty ;
     rdfs:label "has value" ;
     rdfs:domain demo:ConveyorPosition ;
     rdfs:range  xsd:double .

@@ -238,14 +238,17 @@ class PropertySpec:
             sub=prop_iri, pred="rdfs:range", include_implicit=True
         )
 
-        if len(query_result) == 0:
+        range_set = set(triple[2] for triple in range_query_result)
+        range_set -= {IRI("http://www.w3.org/2002/07/owl#Thing")}
+
+        if len(range_set) == 0:
             raise ValueError(f"Property {prop_iri} has no rdfs:range defined.")
-        elif len(query_result) > 1:
+        elif len(range_set) > 1:
             raise ValueError(
-                f"Property {prop_iri} has multiple rdfs:range defined: {[triple[2] for triple in query_result]}"
+                f"Property {prop_iri} has multiple rdfs:range defined: {range_set}"
             )
 
-        prop_range = query_result.pop()[2]
+        prop_range = range_set.pop()
         if isinstance(prop_range, type):
             if nested_scope:
                 raise ValueError(

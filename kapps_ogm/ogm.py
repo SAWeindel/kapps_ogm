@@ -120,12 +120,9 @@ class OGM:
             ogm=self,
         )
 
-        if node.has_data:
-            node.materialize()
+        node.materialize()
 
         if persist:
-            if not node.has_data:
-                raise ValueError("Cannot persist a Node without data.")
             triples = node.to_triples()
             try:
                 self.db.triples_add(triples, named_graph=named_graph)

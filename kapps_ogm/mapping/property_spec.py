@@ -234,18 +234,38 @@ class PropertySpec:
                 characteristics.append(PROPERTY_CHARACTERISTICS[ptype])
 
         # Determine the property specification based on its range
-        range_query_result = ogm.db.triples_get(
-            sub=prop_iri, pred="rdfs:range", include_implicit=True
+        # For subclass and subproperty chains, filter to the most specific element
+        range_query = f"""
+        SELECT DISTINCT ?obj
+        WHERE {{
+            <{prop_iri}> <http://www.w3.org/2000/01/rdf-schema#range> ?obj .
+            FILTER NOT EXISTS {{
+                <{prop_iri}> <http://www.w3.org/2000/01/rdf-schema#range> ?sub .
+                FILTER (?sub != ?obj)
+                {{
+                    ?sub <http://www.w3.org/2000/01/rdf-schema#subClassOf>+ ?obj
+                }}
+                UNION
+                {{
+                    ?sub <http://www.w3.org/2000/01/rdf-schema#subPropertyOf>+ ?obj
+                }}
+            }}
+        }}
+        """
+
+        range_query_result = ogm.db.query(range_query, convert_bindings=True)
+        range_set = set(
+            d["obj"] for d in range_query_result.get("results", {}).get("bindings", [])
         )
 
-        if len(range_query_result) == 0:
+        if len(range_set) == 0:
             raise ValueError(f"Property {prop_iri} has no rdfs:range defined.")
-        elif len(range_query_result) > 1:
+        elif len(range_set) > 1:
             raise ValueError(
-                f"Property {prop_iri} has multiple rdfs:range defined: {[triple[2] for triple in range_query_result]}"
+                f"Property {prop_iri} has multiple independent rdfs:range defined, this is not supported: {range_set}"
             )
 
-        prop_range = range_query_result.pop()[2]
+        prop_range = range_set.pop()
         if isinstance(prop_range, type):
             if nested_scope:
                 raise ValueError(

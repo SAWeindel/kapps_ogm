@@ -238,7 +238,7 @@ class PropertySpec:
             sub=prop_iri, pred="rdfs:range", include_implicit=True
         )
 
-        range_set = set(triple[2] for triple in range_query_result)
+        range_set = set(triple[2] for triple in query_result)
         range_set -= {IRI("http://www.w3.org/2002/07/owl#Thing")}
 
         if len(range_set) == 0:

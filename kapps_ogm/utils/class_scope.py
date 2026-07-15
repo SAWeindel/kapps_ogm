@@ -25,6 +25,14 @@ class ClassScope(dict[IRI, "ClassScope"]):
 
             property_chains = []
             for property_iri, nested_nodes in node.data.items():
+                if not nested_nodes:
+                    # Empty-valued property: still include it as a leaf chain so the
+                    # derived scope covers it. Without this, a commit that clears a
+                    # property (data value == []) would derive a scope that omits the
+                    # property, fetch the old state without it, and therefore never
+                    # diff it away — making property removal impossible.
+                    property_chains.append([property_iri])
+                    continue
                 for nested_node in nested_nodes:
                     nested_chains = chains_from_node_data(nested_node)
                     for chain in nested_chains:

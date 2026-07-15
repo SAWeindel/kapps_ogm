@@ -13,7 +13,6 @@ from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from kapps_ogm.utils.blank_instance import _create_blank_instance
 from kapps_ogm.utils.loader_strategy import LoaderStrategy
 from kapps_ogm.utils.class_scope import ClassScope
-from kapps_ogm.utils.pretty_print import format_triples_turtle
 
 
 class OGM:
@@ -400,19 +399,18 @@ class OGM:
 
         old_triples, new_triples = old_node.diff(other=new_node)
 
-        import json
-        from kapps_ogm.utils.json_ogm_encoder import OGMEncoder
-
-        print("\n--- Old data --- \n")
-        print(json.dumps(old_node.to_json_ld(), indent=2, cls=OGMEncoder))
-
-        print("\n--- New data --- \n")
-        print(json.dumps(new_node.to_json_ld(), indent=2, cls=OGMEncoder))
-
-        print(
-            f"Updating instance {instance_iri}: removing {len(old_triples)} triples, adding {len(new_triples)} triples:\n\n--- Old triples to be deleted ---\n{format_triples_turtle(old_triples)}\n\n--- New triples to be added ---\n{format_triples_turtle(new_triples)}",
+        self.logger.debug(
+            "Updating instance %s: removing %d triples, adding %d triples",
+            instance_iri,
+            len(old_triples),
+            len(new_triples),
         )
 
+        # triples_update issues a single atomic DELETE/INSERT SPARQL transaction, so
+        # the removed and added triples are applied together. This is required for
+        # SHACL correctness: a replacement of a cardinality-constrained property (e.g.
+        # a possession handover under a "possessed by exactly one resource" shape)
+        # must never expose the intermediate state where the property is absent.
         try:
             self.db.triples_update(
                 old_triples=old_triples,

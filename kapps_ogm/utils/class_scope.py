@@ -44,6 +44,13 @@ class ClassScope(dict[IRI, "ClassScope"]):
         return cls.from_property_chains(chains)
 
     @classmethod
+    def from_data_dict(cls, data: dict) -> ClassScope:
+        from kapps_ogm.node.core import Node
+
+        node = Node(data=data)
+        return cls.from_node_data(node)
+
+    @classmethod
     def from_property_chains(cls, property_chains: list[list[IRILike]]) -> ClassScope:
         # sort property chains by first element
 

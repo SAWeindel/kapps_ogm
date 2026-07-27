@@ -119,12 +119,9 @@ class OGM:
             ogm=self,
         )
 
-        if node.has_data:
-            node.materialize()
+        node.materialize()
 
         if persist:
-            if not node.has_data:
-                raise ValueError("Cannot persist a Node without data.")
             triples = node.to_triples()
             try:
                 self.db.triples_add(triples, named_graph=named_graph)
@@ -399,12 +396,15 @@ class OGM:
 
         old_triples, new_triples = old_node.diff(other=new_node)
 
-        self.logger.debug(
-            "Updating instance %s: removing %d triples, adding %d triples",
-            instance_iri,
-            len(old_triples),
-            len(new_triples),
-        )
+        # Merge note: origin/paper logged the full turtle at INFO. Kept the richer
+        # content but moved to DEBUG and guarded, because a library that dumps every
+        # triple on every commit is unusable for a consumer that commits per
+        # operation-status change — and the f-string would render the turtle even
+        # when the level suppresses it.
+        if self.logger.isEnabledFor(logging.DEBUG):
+            self.logger.debug(
+                f"Updating instance {instance_iri}: removing {len(old_triples)} triples, adding {len(new_triples)} triples:\n\n--- Old triples to be deleted ---\n{format_triples_turtle(old_triples)}\n\n--- New triples to be added ---\n{format_triples_turtle(new_triples)}",
+            )
 
         # triples_update issues a single atomic DELETE/INSERT SPARQL transaction, so
         # the removed and added triples are applied together. This is required for

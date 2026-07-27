@@ -256,7 +256,10 @@ class TestPropertySpecification:
         )
 
         # Execute & Assert
-        with pytest.raises(ValueError, match="has multiple rdfs:range defined"):
+        # Tolerant of the wording change in 3a86137, which narrowed the raise to
+        # ranges that are genuinely independent (unrelated by subClassOf/subPropertyOf)
+        # but left this assertion behind, so the suite failed on that branch.
+        with pytest.raises(ValueError, match="has multiple.*rdfs:range defined"):
             PropertySpec.specify(
                 prop_iri=prop_iri,
                 ogm=ogm,

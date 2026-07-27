@@ -216,10 +216,10 @@ class PropertySpec:
         hydration_level: "ClassHydrationLevel",
     ) -> PropertySpec:
         # Categorize the property regarding its type and characteristics
-        query_result = ogm.db.triples_get(
-            sub=prop_iri, pred="rdf:type", include_implicit=False
+        type_query_result = ogm.db.triples_get(
+            sub=prop_iri, pred="rdf:type", include_implicit=True
         )
-        property_types = [triple[2] for triple in query_result]
+        property_types = [triple[2] for triple in type_query_result]
 
         if not property_types:
             raise ValueError(f"Property {prop_iri} has no rdf:type defined.")
@@ -234,18 +234,41 @@ class PropertySpec:
                 characteristics.append(PROPERTY_CHARACTERISTICS[ptype])
 
         # Determine the property specification based on its range
-        query_result = ogm.db.triples_get(
-            sub=prop_iri, pred="rdfs:range", include_implicit=True
+        # For subclass and subproperty chains, filter to the most specific element
+        range_query = f"""
+        SELECT DISTINCT ?obj
+        WHERE {{
+            <{prop_iri}> <http://www.w3.org/2000/01/rdf-schema#range> ?obj .
+            FILTER NOT EXISTS {{
+                <{prop_iri}> <http://www.w3.org/2000/01/rdf-schema#range> ?sub .
+                FILTER (?sub != ?obj)
+                {{
+                    ?sub <http://www.w3.org/2000/01/rdf-schema#subClassOf>+ ?obj
+                }}
+                UNION
+                {{
+                    ?sub <http://www.w3.org/2000/01/rdf-schema#subPropertyOf>+ ?obj
+                }}
+            }}
+        }}
+        """
+
+        range_query_result = ogm.db.query(range_query, convert_bindings=True)
+        range_set = set(
+            d["obj"] for d in range_query_result.get("results", {}).get("bindings", [])
         )
 
-        range_set = set(triple[2] for triple in query_result)
+        # Belt-and-braces on top of the subsumption filter above: owl:Thing is only
+        # excluded by that filter when `<other range> rdfs:subClassOf+ owl:Thing` is
+        # materialized, which is not guaranteed for an anonymous restriction class.
+        # (Merge note: this line is bcb7840, the earlier fix for the same problem.)
         range_set -= {IRI("http://www.w3.org/2002/07/owl#Thing")}
 
         if len(range_set) == 0:
             raise ValueError(f"Property {prop_iri} has no rdfs:range defined.")
         elif len(range_set) > 1:
             raise ValueError(
-                f"Property {prop_iri} has multiple rdfs:range defined: {range_set}"
+                f"Property {prop_iri} has multiple independent rdfs:range defined, this is not supported: {range_set}"
             )
 
         prop_range = range_set.pop()

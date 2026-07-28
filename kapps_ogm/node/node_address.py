@@ -31,11 +31,12 @@ def reconcile_anonymous_addresses(*, old: "Node", new: "Node") -> None:
     yet, so leaving the new one unaddressed relocates it to a Skolem IRI on this write — a
     one-time migration, after which its address is stable.
 
-    Known limitation: alignment is by position, so a caller who *reorders* an equal-length list of
-    anonymous values silently swaps their addresses. A shortened list is refused outright (see
-    ``AmbiguousNodeAlignmentError``), but reordering is not detectable from position alone.
-    Matching on declared content instead would close this; it is not needed while parameter
-    properties are effectively single-valued.
+    Known limitation (#18): alignment is by position, so a caller who *reorders* an equal-length
+    list of anonymous values silently swaps their addresses. A shortened list is refused outright
+    (see ``AmbiguousNodeAlignmentError``), but reordering is not detectable from position alone.
+    It cannot arise until one property carries two or more anonymous nodes, which no current
+    domain model does. Closing it wants content-based matching — and probably #7 first, since
+    under the locator pattern two sibling parameter nodes are often content-identical.
 
     Args:
         old: The node as fetched from the store, carrying the authoritative addresses.

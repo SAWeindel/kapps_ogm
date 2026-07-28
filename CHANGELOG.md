@@ -122,9 +122,17 @@
   moving one parameter's properties onto another parameter's node. That is a worse failure than
   losing an address, so it now raises `AmbiguousNodeAlignmentError` rather than guessing.
   Clearing a property entirely stays legal — there is nothing left to misassign. Reordering an
-  equal-length list is still undetectable from position alone and is documented as such; closing
-  it needs content-based matching, which is not warranted while parameter properties are
-  effectively single-valued.
+  equal-length list is still undetectable from position alone; that is filed as **#18** and
+  cannot arise until one property carries two or more anonymous nodes, which no current domain
+  model does. Closing it wants content-based matching, and probably #7 first — under the locator
+  pattern (ADR 0024) two sibling parameter nodes carry a unit and metadata but no value, so they
+  are frequently content-identical and ties are the normal case rather than the edge case.
+
+  On the namespace: Ratan settled the minting authority as `w3id.org/circularfactory`, which is
+  what `DEFAULT_SKOLEM_NAMESPACE` already uses, so requiring the well-known path constrains
+  nothing that was wanted. Had `urn:uuid:` been chosen instead — one of the three candidates the
+  PRD left open — it would have been rejected here, and under the unvalidated code it would
+  instead have silently disarmed the `fetch` guard.
 
   `kapps_ogm/utils/__init__.py` now re-exports the new errors and Skolem helpers, matching how
   `constants`, `pretty_print`, `json_ogm_encoder` and `class_scope` are already surfaced.

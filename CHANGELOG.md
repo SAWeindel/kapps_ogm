@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### Removed
+
+- **`tests/integration/test_roundtrip.py`, the repository's only integration test,
+  pending the semantic middleware rebuild.** It asserted the OGM's round-trip
+  identity contract — `create(persist=True)` followed by `fetch(materialize=True)`
+  yields the same JSON-LD — and in doing so was also the only executable
+  demonstration of how `kapps_semantic_middleware` drives the OGM. Removed for two
+  reasons: its shape (a hand-built `ClassScope` from two depth-1 property chains,
+  passed to both `create` and `fetch`) encodes the *previous* middleware's call
+  pattern, which pins the OGM interface while its only real consumer is being
+  rebuilt; and it never reached its own assertion, failing instead inside
+  `ogm.create` on the unrelated defect tracked as #13. A permanently-red test that
+  fails before the property it exists to check asserts nothing.
+
+  The contract and the demonstration role are both still wanted: reinstating them
+  against the rebuilt middleware is tracked as #16, which carries the removed source
+  verbatim for reconstruction. Its fixture data,
+  `tests/test_data/TransferUnit1_data.json`, is deliberately retained and is
+  currently unreferenced.
+
+  `deepdiff` remains a declared dev dependency — `tests/unit/test_class_scope.py`
+  still uses it.
+
 ### Fixed
 
 - **The test suite could not be installed or run from the manifest: two packages

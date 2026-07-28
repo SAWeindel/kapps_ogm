@@ -28,15 +28,30 @@ class PropertyValueKind(Enum):
     COMPLEX = "complex"
 
 
-def _most_restrictive(
-    tighten: Callable[[int, int], int], mine: Optional[int], theirs: Optional[int]
+def chain_ranges(prop_iri: IRI, range_var: str, ancestor_var: str = "?ancestor") -> str:
+    """The SPARQL prelude binding `range_var` to every rdfs:range along a property's chain.
+
+    RDFS entails no rdfs:range triple for a subproperty and GraphDB materializes none, so
+    every query that needs a property's effective shape has to walk the chain itself. The
+    `*` path is a transitive closure, which is what makes a cyclic rdfs:subPropertyOf
+    assertion terminate rather than recurse. Shared so the four call sites cannot drift.
+    """
+    # Kept to one line so it interpolates cleanly at any indentation.
+    return (
+        f"<{prop_iri}> <http://www.w3.org/2000/01/rdf-schema#subPropertyOf>* {ancestor_var} . "
+        f"{ancestor_var} <http://www.w3.org/2000/01/rdf-schema#range> {range_var} ."
+    )
+
+
+def _tighten_bound(
+    mine: Optional[int], theirs: Optional[int], combine: Callable[[int, int], int]
 ) -> Optional[int]:
     """Combine two cardinality bounds conjunctively; an absent bound constrains nothing."""
     if mine is None:
         return theirs
     if theirs is None:
         return mine
-    return tighten(mine, theirs)
+    return combine(mine, theirs)
 
 
 @dataclass
@@ -220,22 +235,25 @@ class PropertySpec:
         return field_type, field
 
     @classmethod
-    def _resolve_effective_ranges(cls, prop_iri: IRI, ogm: "OGM") -> set:
+    def _resolve_effective_ranges(
+        cls, prop_iri: IRI, ogm: "OGM"
+    ) -> set[Union[IRI, BNode, type]]:
         """Resolve all effective rdfs:range assertions across the rdfs:subPropertyOf* chain.
 
-        Returns the set of effective ranges — every rdfs:range asserted on prop_iri or on any of
-        its rdfs:subPropertyOf ancestors, after the most-specific-named-class filter. The isIRI
-        guard ensures the subsumption filter only applies to named classes, never discarding an
-        anonymous restriction range.
+        Returns every rdfs:range asserted on prop_iri or on any of its rdfs:subPropertyOf
+        ancestors, after the most-specific-named-class filter. The set is deliberately
+        heterogeneous: a named class arrives as an IRI, an XSD datatype as a python type,
+        and an anonymous restriction as a BNode, and the caller dispatches on which.
         """
         range_query = f"""
         SELECT DISTINCT ?obj
         WHERE {{
-            <{prop_iri}> <http://www.w3.org/2000/01/rdf-schema#subPropertyOf>* ?ancestor .
-            ?ancestor <http://www.w3.org/2000/01/rdf-schema#range> ?obj .
+            {chain_ranges(prop_iri, "?obj")}
             FILTER NOT EXISTS {{
-                <{prop_iri}> <http://www.w3.org/2000/01/rdf-schema#subPropertyOf>* ?otherAncestor .
-                ?otherAncestor <http://www.w3.org/2000/01/rdf-schema#range> ?sub .
+                {chain_ranges(prop_iri, "?sub", ancestor_var="?otherAncestor")}
+                # The subsumption filter picks the most specific *named* class. Without the
+                # isIRI guard it could also discard an anonymous restriction range, silently
+                # dropping half a merge.
                 FILTER (?sub != ?obj && isIRI(?sub) && isIRI(?obj))
                 {{
                     ?sub <http://www.w3.org/2000/01/rdf-schema#subClassOf>+ ?obj
@@ -253,10 +271,11 @@ class PropertySpec:
             d["obj"] for d in range_query_result.get("results", {}).get("bindings", [])
         )
 
-        # Belt-and-braces on top of the subsumption filter above: owl:Thing is only
-        # excluded by that filter when `<other range> rdfs:subClassOf+ owl:Thing` is
-        # materialized, which is not guaranteed for an anonymous restriction class.
-        # (Merge note: this line is bcb7840, the earlier fix for the same problem.)
+        # owl:Thing constrains nothing, and since the isIRI guard above confines the
+        # subsumption filter to named ranges it can no longer be filtered out by an
+        # anonymous sibling. Dropping it here is what stops an ancestor declaring
+        # `rdfs:range owl:Thing` from being read as a named range mixed with an
+        # anonymous one. (Merge note: this line is bcb7840.)
         range_set -= {IRI("http://www.w3.org/2002/07/owl#Thing")}
 
         return range_set
@@ -292,8 +311,8 @@ class PropertySpec:
         merged_all_from = reconcile_type("allValuesFrom", self.all_from, other.all_from)
 
         # Cardinality — most restrictive wins
-        merged_min_count = _most_restrictive(max, self.min_count, other.min_count)
-        merged_max_count = _most_restrictive(min, self.max_count, other.max_count)
+        merged_min_count = _tighten_bound(self.min_count, other.min_count, max)
+        merged_max_count = _tighten_bound(self.max_count, other.max_count, min)
 
         if (
             merged_min_count is not None
@@ -369,11 +388,11 @@ class PropertySpec:
             )
 
         if anonymous_ranges:
-            # Run the existing query_is_complex_type ASK, modified to walk the chain
+            # An anonymous range is only usable if it is a class expression we can project
+            # a shape from; anything else is an ontology we do not understand.
             query_is_complex_type = f"""
                 ASK {{
-                    <{prop_iri}> <http://www.w3.org/2000/01/rdf-schema#subPropertyOf>* ?ancestor .
-                    ?ancestor <http://www.w3.org/2000/01/rdf-schema#range> ?range .
+                    {chain_ranges(prop_iri, "?range")}
                     {{
                         ?range a <http://www.w3.org/2002/07/owl#Restriction>
                     }}
@@ -520,8 +539,7 @@ class PropertySpec:
             ?effectiveMinCardinality ?effectiveMaxCardinality
             ?intersectionList
         WHERE {{
-            <{prop_iri}> <http://www.w3.org/2000/01/rdf-schema#subPropertyOf>* ?ancestor .
-            ?ancestor <http://www.w3.org/2000/01/rdf-schema#range> ?range .
+            {chain_ranges(prop_iri, "?range")}
             {{
                 ?range <http://www.w3.org/2002/07/owl#intersectionOf> ?intersectionList .
                 ?intersectionList <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first> ?restriction .
@@ -536,6 +554,10 @@ class PropertySpec:
                 ?range a <http://www.w3.org/2002/07/owl#Restriction> .
                 BIND(?range AS ?restriction)
             }}
+            # Binds ?restriction before the detail OPTIONALs below. Leave it out and a bare
+            # owl:Restriction range, which matches neither structural branch, leaves the
+            # variable unbound — and every OPTIONAL then matches every restriction in the
+            # repository rather than this property's.
             ?restriction a <http://www.w3.org/2002/07/owl#Restriction> .
             OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#onProperty> ?onProperty }}
             OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#someValuesFrom> ?someValuesFrom }}
@@ -621,8 +643,7 @@ class PropertySpec:
         # Query 2 — structural metadata
         query_metadata = f"""SELECT DISTINCT ?unionList ?complementClass ?oneOfList
         WHERE {{
-            <{prop_iri}> <http://www.w3.org/2000/01/rdf-schema#subPropertyOf>* ?ancestor .
-            ?ancestor <http://www.w3.org/2000/01/rdf-schema#range> ?range .
+            {chain_ranges(prop_iri, "?range")}
             {{
                 ?range <http://www.w3.org/2002/07/owl#unionOf> ?unionList
             }}

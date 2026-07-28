@@ -405,6 +405,9 @@ class TestMergeConflictRules:
     def test_differing_cardinalities_take_the_most_restrictive(self, ogm: OGM):
         """minCardinality 1 on one side, maxCardinality 3 on one side and maxCardinality 2 on the
         other. Assert merged min_count == 1 and max_count == 2.
+
+        Both sides carry a maximum so the merge has to choose between them, rather than
+        inheriting the only bound that was set.
         """
         NS_test = NS + "card_"
         prop_iri = IRI(NS_test + "hasVal")
@@ -422,6 +425,7 @@ class TestMergeConflictRules:
                         shared_prop,
                         all_values_from=IRI("xsd:string"),
                         min_cardinality=1,
+                        max_cardinality=3,
                     ),
                 )
             ],

@@ -40,9 +40,7 @@ class PropertySpec:
 
     @property
     def required(self) -> bool:
-        if self.min_count is not None and self.min_count >= 1:
-            return True
-        return False
+        return False  # Under OWA, OWL restrictions never enforce requiredness.
 
     def to_string(self) -> str:
         from ..utils.pretty_print import format_property_spec

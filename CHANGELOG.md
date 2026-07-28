@@ -25,6 +25,29 @@
   `deepdiff` remains a declared dev dependency — `tests/unit/test_class_scope.py`
   still uses it.
 
+- **`scripts/demo_instantiation.py`, for the same reason, and because it was the
+  last consumer of undeclared packages.** It was the repository's most complete
+  worked example — the only one going all the way from an ontology class to a served
+  REST API: `ClassScope.from_property_chains` → `ClassSpec.specify` →
+  `to_pydantic_model` → `create_blank_instance` → `ogm.create` (in-memory *and*
+  persisted to a named graph) → `materialize` → `to_triples` / `to_json_ld` →
+  `aas.DataModel.from_models` → `generate_rest_api_for_data_model` → `uvicorn.run`.
+
+  Only that last stretch needed `aas_middleware` and `uvicorn`, and neither is
+  declared in `pyproject.toml`; `aas_middleware` was deliberately dropped in 279851e
+  ("This will break demos"). Once #15 was fixed, this script was the only thing in
+  the repository that still could not be run from a clean environment built from the
+  manifest — **with it gone, every remaining script and test can.** It also encoded
+  the previous middleware's call pattern and carried a hardcoded GraphDB hostname.
+
+  Reinstatement is split in two, because the demo must in future drive
+  `kapps_semantic_middleware` rather than construct `aas_middleware` directly — and
+  that half cannot live in this repository, since the middleware already depends on
+  `kapps_ogm` and a demo here driving it would close a dependency cycle. The OGM-only
+  portion is #17 and is blocked on nothing; the end-to-end portion is
+  `EHoffm/kapps_semantic_middleware#56`. The four generated artefacts under
+  `scripts/output/` are retained for reference and are now stale and unreferenced.
+
 ### Fixed
 
 - **The test suite could not be installed or run from the manifest: two packages

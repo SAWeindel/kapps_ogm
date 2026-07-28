@@ -2,7 +2,6 @@ import os
 import sys
 import pytest
 
-from aas_middleware import AasMiddleware
 from graph_db_interface import GraphDB, GraphDBCredentials
 
 from kapps_ogm.ogm import OGM
@@ -47,9 +46,3 @@ def ogm(db: GraphDB) -> OGM:
     """Create an OGM instance with a mocked database."""
     ogm = OGM(db=db)
     return ogm
-
-
-@pytest.fixture(scope="session")
-def mw() -> AasMiddleware:
-    mw = AasMiddleware()
-    return mw

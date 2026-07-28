@@ -6,6 +6,7 @@ build/
 .*/
 
 !/.gitignore
+!/CHANGELOG.md
 !/LICENSE
 !/pyproject.toml
 !/README.md

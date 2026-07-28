@@ -27,6 +27,7 @@ graph_db_interface = "^2.0.1"
 black = "^25.1.0"
 pytest = "^8.2.0"
 pylint = "^3.3.4"
+deepdiff = "^9.1.0"
 
 [tool.pylint."MESSAGES CONTROL"]
 disable = [

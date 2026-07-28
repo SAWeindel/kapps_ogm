@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Optional, Type, TYPE_CHECKING, Any, Union, Annotated
+from typing import Optional, Type, TYPE_CHECKING, Any, Union, Annotated, Callable
 from enum import Enum
 from dataclasses import dataclass
 from graph_db_interface import IRI, XSDToPythonTypes
 import logging
 from pydantic import BeforeValidator, Field, conlist
+from rdflib import BNode
 
 from kapps_ogm.utils.constants import (
     PROPERTY_TYPES,
@@ -25,6 +26,17 @@ class PropertyValueKind(Enum):
     LITERAL = "literal"
     OBJECT = "object"
     COMPLEX = "complex"
+
+
+def _most_restrictive(
+    tighten: Callable[[int, int], int], mine: Optional[int], theirs: Optional[int]
+) -> Optional[int]:
+    """Combine two cardinality bounds conjunctively; an absent bound constrains nothing."""
+    if mine is None:
+        return theirs
+    if theirs is None:
+        return mine
+    return tighten(mine, theirs)
 
 
 @dataclass
@@ -208,6 +220,113 @@ class PropertySpec:
         return field_type, field
 
     @classmethod
+    def _resolve_effective_ranges(cls, prop_iri: IRI, ogm: "OGM") -> set:
+        """Resolve all effective rdfs:range assertions across the rdfs:subPropertyOf* chain.
+
+        Returns the set of effective ranges — every rdfs:range asserted on prop_iri or on any of
+        its rdfs:subPropertyOf ancestors, after the most-specific-named-class filter. The isIRI
+        guard ensures the subsumption filter only applies to named classes, never discarding an
+        anonymous restriction range.
+        """
+        range_query = f"""
+        SELECT DISTINCT ?obj
+        WHERE {{
+            <{prop_iri}> <http://www.w3.org/2000/01/rdf-schema#subPropertyOf>* ?ancestor .
+            ?ancestor <http://www.w3.org/2000/01/rdf-schema#range> ?obj .
+            FILTER NOT EXISTS {{
+                <{prop_iri}> <http://www.w3.org/2000/01/rdf-schema#subPropertyOf>* ?otherAncestor .
+                ?otherAncestor <http://www.w3.org/2000/01/rdf-schema#range> ?sub .
+                FILTER (?sub != ?obj && isIRI(?sub) && isIRI(?obj))
+                {{
+                    ?sub <http://www.w3.org/2000/01/rdf-schema#subClassOf>+ ?obj
+                }}
+                UNION
+                {{
+                    ?sub <http://www.w3.org/2000/01/rdf-schema#subPropertyOf>+ ?obj
+                }}
+            }}
+        }}
+        """
+
+        range_query_result = ogm.db.query(range_query, convert_bindings=True)
+        range_set = set(
+            d["obj"] for d in range_query_result.get("results", {}).get("bindings", [])
+        )
+
+        # Belt-and-braces on top of the subsumption filter above: owl:Thing is only
+        # excluded by that filter when `<other range> rdfs:subClassOf+ owl:Thing` is
+        # materialized, which is not guaranteed for an anonymous restriction class.
+        # (Merge note: this line is bcb7840, the earlier fix for the same problem.)
+        range_set -= {IRI("http://www.w3.org/2002/07/owl#Thing")}
+
+        return range_set
+
+    def merge_conjunctive(
+        self, other: "PropertySpec", owner_iri: IRI
+    ) -> "PropertySpec":
+        """Conjunctive merge of two restrictions on the same nested property.
+
+        Returns a new PropertySpec; does not mutate either input. owner_iri appears in error
+        messages so a failure names the property whose range is malformed.
+        """
+        if self.iri != other.iri:
+            raise ValueError(
+                f"Cannot merge PropertySpecs with different IRIs: {self.iri} vs {other.iri}"
+            )
+
+        def reconcile_type(owl_term: str, mine: Any, theirs: Any) -> Any:
+            """One side's constraint, or the shared one; two different ones are an ontology error."""
+            if mine is not None and theirs is not None and mine != theirs:
+                raise ValueError(
+                    f"Property {self.iri} is constrained to incompatible {owl_term} by two "
+                    f"rdfs:range restrictions of {owner_iri}: {mine} and {theirs}"
+                )
+            return mine if mine is not None else theirs
+
+        merged_python_range_type = reconcile_type(
+            "allValuesFrom", self.python_range_type, other.python_range_type
+        )
+        merged_some_from = reconcile_type(
+            "someValuesFrom", self.some_from, other.some_from
+        )
+        merged_all_from = reconcile_type("allValuesFrom", self.all_from, other.all_from)
+
+        # Cardinality — most restrictive wins
+        merged_min_count = _most_restrictive(max, self.min_count, other.min_count)
+        merged_max_count = _most_restrictive(min, self.max_count, other.max_count)
+
+        if (
+            merged_min_count is not None
+            and merged_max_count is not None
+            and merged_min_count > merged_max_count
+        ):
+            raise ValueError(
+                f"Property {self.iri} is unsatisfiable after merging the rdfs:range restrictions "
+                f"of {owner_iri}: minimum cardinality {merged_min_count} exceeds maximum cardinality {merged_max_count}"
+            )
+
+        # A cardinality-only restriction carries no type information, so it must not
+        # downgrade a typed one: LITERAL wins over OBJECT.
+        if PropertyValueKind.LITERAL in (self.value_kind, other.value_kind):
+            merged_value_kind = PropertyValueKind.LITERAL
+        else:
+            merged_value_kind = self.value_kind
+
+        # nested — take whichever side is set; if both are set, keep self.nested
+        merged_nested = self.nested if self.nested is not None else other.nested
+
+        return PropertySpec(
+            iri=self.iri,
+            value_kind=merged_value_kind,
+            python_range_type=merged_python_range_type,
+            min_count=merged_min_count,
+            max_count=merged_max_count,
+            some_from=merged_some_from,
+            all_from=merged_all_from,
+            nested=merged_nested,
+        )
+
+    @classmethod
     def specify(
         cls,
         prop_iri: IRI,
@@ -234,67 +353,27 @@ class PropertySpec:
                 characteristics.append(PROPERTY_CHARACTERISTICS[ptype])
 
         # Determine the property specification based on its range
-        # For subclass and subproperty chains, filter to the most specific element
-        range_query = f"""
-        SELECT DISTINCT ?obj
-        WHERE {{
-            <{prop_iri}> <http://www.w3.org/2000/01/rdf-schema#range> ?obj .
-            FILTER NOT EXISTS {{
-                <{prop_iri}> <http://www.w3.org/2000/01/rdf-schema#range> ?sub .
-                FILTER (?sub != ?obj)
-                {{
-                    ?sub <http://www.w3.org/2000/01/rdf-schema#subClassOf>+ ?obj
-                }}
-                UNION
-                {{
-                    ?sub <http://www.w3.org/2000/01/rdf-schema#subPropertyOf>+ ?obj
-                }}
-            }}
-        }}
-        """
+        range_set = cls._resolve_effective_ranges(prop_iri=prop_iri, ogm=ogm)
 
-        range_query_result = ogm.db.query(range_query, convert_bindings=True)
-        range_set = set(
-            d["obj"] for d in range_query_result.get("results", {}).get("bindings", [])
-        )
+        anonymous_ranges = {r for r in range_set if isinstance(r, BNode)}
+        named_ranges = range_set - anonymous_ranges
 
-        # Belt-and-braces on top of the subsumption filter above: owl:Thing is only
-        # excluded by that filter when `<other range> rdfs:subClassOf+ owl:Thing` is
-        # materialized, which is not guaranteed for an anonymous restriction class.
-        # (Merge note: this line is bcb7840, the earlier fix for the same problem.)
-        range_set -= {IRI("http://www.w3.org/2002/07/owl#Thing")}
-
-        if len(range_set) == 0:
+        if not range_set:
             raise ValueError(f"Property {prop_iri} has no rdfs:range defined.")
-        elif len(range_set) > 1:
+
+        if anonymous_ranges and named_ranges:
             raise ValueError(
-                f"Property {prop_iri} has multiple independent rdfs:range defined, this is not supported: {range_set}"
+                f"Property {prop_iri} resolves both a named rdfs:range and an anonymous "
+                f"restriction range, which cannot be merged: named {sorted(str(r) for r in named_ranges)}, "
+                f"{len(anonymous_ranges)} anonymous restriction(s)"
             )
 
-        prop_range = range_set.pop()
-        if isinstance(prop_range, type):
-            if nested_scope:
-                raise ValueError(
-                    f"Property {prop_iri} cannot be part of a property chain as it has a literal range {prop_range}"
-                )
-            property_spec = cls._specify_literal_property(
-                prop_iri=prop_iri,
-                python_type=prop_range,
-            )
-        elif isinstance(prop_range, IRI):
-            property_spec = cls._specify_class_property(
-                prop_iri=prop_iri,
-                range_iri=prop_range,
-                nested_scope=nested_scope,
-                ogm=ogm,
-                hydration_level=hydration_level,
-            )
-        else:
-            # Is blank node: Check if valid structure for complex datatype
+        if anonymous_ranges:
+            # Run the existing query_is_complex_type ASK, modified to walk the chain
             query_is_complex_type = f"""
                 ASK {{
-                    BIND({prop_iri.n3()} AS ?property)
-                    ?property <http://www.w3.org/2000/01/rdf-schema#range> ?range .
+                    <{prop_iri}> <http://www.w3.org/2000/01/rdf-schema#subPropertyOf>* ?ancestor .
+                    ?ancestor <http://www.w3.org/2000/01/rdf-schema#range> ?range .
                     {{
                         ?range a <http://www.w3.org/2002/07/owl#Restriction>
                     }}
@@ -320,6 +399,33 @@ class PropertySpec:
                 property_spec = cls._specify_complex_property(
                     prop_iri=prop_iri,
                     ogm=ogm,
+                )
+            else:
+                raise ValueError(
+                    f"Unknown property_type: {sorted(str(r) for r in anonymous_ranges)} for property {prop_iri}"
+                )
+        elif len(named_ranges) > 1:
+            raise ValueError(
+                f"Property {prop_iri} has multiple independent rdfs:range defined, this is not supported: {named_ranges}"
+            )
+        else:
+            prop_range = named_ranges.pop()
+            if isinstance(prop_range, type):
+                if nested_scope:
+                    raise ValueError(
+                        f"Property {prop_iri} cannot be part of a property chain as it has a literal range {prop_range}"
+                    )
+                property_spec = cls._specify_literal_property(
+                    prop_iri=prop_iri,
+                    python_type=prop_range,
+                )
+            elif isinstance(prop_range, IRI):
+                property_spec = cls._specify_class_property(
+                    prop_iri=prop_iri,
+                    range_iri=prop_range,
+                    nested_scope=nested_scope,
+                    ogm=ogm,
+                    hydration_level=hydration_level,
                 )
             else:
                 raise ValueError(
@@ -399,64 +505,7 @@ class PropertySpec:
             nested=None,
         )
 
-        # SPARQL query to get range restrictions and structural elements
-        query = f"""SELECT
-            ?range ?restriction ?onProperty ?someValuesFrom ?allValuesFrom
-            ?minCardinality ?maxCardinality ?cardinality
-            ?effectiveMinCardinality ?effectiveMaxCardinality
-            ?intersectionList ?unionList ?complementClass ?oneOfList
-        WHERE {{
-            {prop_iri.n3()} <http://www.w3.org/2000/01/rdf-schema#range> ?range .
-
-            # IntersectionOf members
-            OPTIONAL {{
-                ?range <http://www.w3.org/2002/07/owl#intersectionOf> ?intersectionList .
-                ?intersectionList <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first> ?restriction .
-                ?restriction a <http://www.w3.org/2002/07/owl#Restriction> .
-            }}
-
-            # UnionOf members
-            OPTIONAL {{
-                ?range <http://www.w3.org/2002/07/owl#unionOf> ?unionList .
-                ?unionList <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first> ?restriction .
-                ?restriction a <http://www.w3.org/2002/07/owl#Restriction> .
-            }}
-
-            # Restriction details
-            OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#onProperty> ?onProperty }}
-            OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#someValuesFrom> ?someValuesFrom }}
-            OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#allValuesFrom> ?allValuesFrom }}
-            OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#minCardinality> ?minCardinality }}
-            OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#maxCardinality> ?maxCardinality }}
-            OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#cardinality> ?cardinality }}
-
-            # Normalize cardinality
-            BIND(IF(BOUND(?cardinality), ?cardinality, ?minCardinality) AS ?effectiveMinCardinality)
-            BIND(IF(BOUND(?cardinality), ?cardinality, ?maxCardinality) AS ?effectiveMaxCardinality)
-
-            # Complement and enumeration
-            OPTIONAL {{ ?range <http://www.w3.org/2002/07/owl#complementOf> ?complementClass }}
-            OPTIONAL {{ ?range <http://www.w3.org/2002/07/owl#oneOf> ?oneOfList }}
-        }}"""
-
-        # Execute query
-        query_result = ogm.db.query(query)
-        bindings = query_result["results"]["bindings"]
-
-        if not bindings:
-            # No restrictions; treat as simple object with empty ClassSpec
-            # Anonymous class is fully specified in-place
-            property_spec.nested = ClassSpec(
-                iri=None,
-                properties={},
-                metadata={},
-                hydration_level=ClassHydrationLevel.FULL,
-            )
-
-            return property_spec
-
-        # Initialize nested ClassSpec for the anonymous range
-        # Anonymous class is fully specified in-place
+        # Build empty anonymous nested ClassSpec up front
         property_spec.nested = ClassSpec(
             iri=None,
             label=None,
@@ -464,6 +513,43 @@ class PropertySpec:
             metadata={},
             hydration_level=ClassHydrationLevel.FULL,  # Anonymous class
         )
+
+        # Query 1 — restrictions and their details
+        query_restrictions = f"""SELECT DISTINCT
+            ?restriction ?onProperty ?someValuesFrom ?allValuesFrom
+            ?effectiveMinCardinality ?effectiveMaxCardinality
+            ?intersectionList
+        WHERE {{
+            <{prop_iri}> <http://www.w3.org/2000/01/rdf-schema#subPropertyOf>* ?ancestor .
+            ?ancestor <http://www.w3.org/2000/01/rdf-schema#range> ?range .
+            {{
+                ?range <http://www.w3.org/2002/07/owl#intersectionOf> ?intersectionList .
+                ?intersectionList <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first> ?restriction .
+            }}
+            UNION
+            {{
+                ?range <http://www.w3.org/2002/07/owl#unionOf> ?unionList .
+                ?unionList <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>*/<http://www.w3.org/1999/02/22-rdf-syntax-ns#first> ?restriction .
+            }}
+            UNION
+            {{
+                ?range a <http://www.w3.org/2002/07/owl#Restriction> .
+                BIND(?range AS ?restriction)
+            }}
+            ?restriction a <http://www.w3.org/2002/07/owl#Restriction> .
+            OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#onProperty> ?onProperty }}
+            OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#someValuesFrom> ?someValuesFrom }}
+            OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#allValuesFrom> ?allValuesFrom }}
+            OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#minCardinality> ?minCardinality }}
+            OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#maxCardinality> ?maxCardinality }}
+            OPTIONAL {{ ?restriction <http://www.w3.org/2002/07/owl#cardinality> ?cardinality }}
+            BIND(IF(BOUND(?cardinality), ?cardinality, ?minCardinality) AS ?effectiveMinCardinality)
+            BIND(IF(BOUND(?cardinality), ?cardinality, ?maxCardinality) AS ?effectiveMaxCardinality)
+        }}"""
+
+        # Execute query 1
+        query_result = ogm.db.query(query_restrictions)
+        bindings = query_result["results"]["bindings"]
 
         # Process each restriction
         for restriction in bindings:
@@ -510,36 +596,70 @@ class PropertySpec:
                         restriction["effectiveMaxCardinality"]["value"]
                     )
 
-                # Add nested property to ClassSpec
-                property_spec.nested.properties[nested_property] = nested_spec
+                # Merge or add nested property to ClassSpec
+                existing = property_spec.nested.properties.get(nested_property)
+                if existing is None:
+                    property_spec.nested.properties[nested_property] = nested_spec
+                else:
+                    property_spec.nested.properties[nested_property] = (
+                        existing.merge_conjunctive(nested_spec, owner_iri=prop_iri)
+                    )
 
-                # Update metadata for intersectionOf
+                # Update metadata for intersectionOf, guarding against duplicates
                 if "intersectionList" in restriction:
                     if "intersectionOf" not in property_spec.nested.metadata:
                         property_spec.nested.metadata["intersectionOf"] = []
-                    property_spec.nested.metadata["intersectionOf"].append(
-                        str(nested_property)
-                    )
+                    nested_prop_str = str(nested_property)
+                    if (
+                        nested_prop_str
+                        not in property_spec.nested.metadata["intersectionOf"]
+                    ):
+                        property_spec.nested.metadata["intersectionOf"].append(
+                            nested_prop_str
+                        )
 
-        # Store unionOf, complementOf, oneOf in metadata from first binding
-        if bindings:
-            first_binding = bindings[0]
+        # Query 2 — structural metadata
+        query_metadata = f"""SELECT DISTINCT ?unionList ?complementClass ?oneOfList
+        WHERE {{
+            <{prop_iri}> <http://www.w3.org/2000/01/rdf-schema#subPropertyOf>* ?ancestor .
+            ?ancestor <http://www.w3.org/2000/01/rdf-schema#range> ?range .
+            {{
+                ?range <http://www.w3.org/2002/07/owl#unionOf> ?unionList
+            }}
+            UNION
+            {{
+                ?range <http://www.w3.org/2002/07/owl#complementOf> ?complementClass
+            }}
+            UNION
+            {{
+                ?range <http://www.w3.org/2002/07/owl#oneOf> ?oneOfList
+            }}
+        }}"""
 
-            if "unionList" in first_binding:
+        # Execute query 2
+        metadata_result = ogm.db.query(query_metadata)
+        metadata_bindings = metadata_result["results"]["bindings"]
+
+        # Iterate all of query 2's bindings; first one seen wins
+        for binding in metadata_bindings:
+            if "unionList" in binding:
                 # Note: resolve_rdf_list method would need to be implemented in GraphDB
-                property_spec.nested.metadata["unionOf"] = first_binding["unionList"][
-                    "value"
-                ]
+                if "unionOf" not in property_spec.nested.metadata:
+                    property_spec.nested.metadata["unionOf"] = binding["unionList"][
+                        "value"
+                    ]
 
-            if "complementClass" in first_binding:
-                property_spec.nested.metadata["complementOf"] = first_binding[
-                    "complementClass"
-                ]["value"]
+            if "complementClass" in binding:
+                if "complementOf" not in property_spec.nested.metadata:
+                    property_spec.nested.metadata["complementOf"] = binding[
+                        "complementClass"
+                    ]["value"]
 
-            if "oneOfList" in first_binding:
+            if "oneOfList" in binding:
                 # Note: resolve_rdf_list method would need to be implemented in GraphDB
-                property_spec.nested.metadata["oneOf"] = first_binding["oneOfList"][
-                    "value"
-                ]
-        # print(f"Complex property {prop} processed: {property_spec.to_string()}")
+                if "oneOf" not in property_spec.nested.metadata:
+                    property_spec.nested.metadata["oneOf"] = binding["oneOfList"][
+                        "value"
+                    ]
+
         return property_spec

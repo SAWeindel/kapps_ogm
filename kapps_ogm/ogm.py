@@ -20,6 +20,7 @@ from kapps_ogm.utils.skolem import (
     DEFAULT_SKOLEM_NAMESPACE,
     is_skolem_iri,
     mint_skolem_iri,
+    validate_skolem_namespace,
 )
 
 
@@ -50,7 +51,7 @@ class OGM:
         self.db = db
         self.loader = loader
         self.naming_schema = naming_schema
-        self.skolem_namespace = skolem_namespace
+        self.skolem_namespace = validate_skolem_namespace(skolem_namespace)
         self.logger = logger or logging.getLogger("kapps_ogm")
         self.logger.setLevel(logging.INFO)
 
@@ -248,7 +249,9 @@ class OGM:
             group[prop_iri].append(value)
 
         # [{"id": <IRI|BNode>, property_iri: [value1, value2, ...], ...}, ...]
-        property_data: list[dict[IRI, list[Any]]] = [
+        # Keys are heterogeneous: the literal "id" holds the node's address, every other key is
+        # a property IRI holding a list of values.
+        property_data: list[dict[Any, Any]] = [
             property_data_dict[key] for key in sorted(property_data_dict)
         ]
         return property_data

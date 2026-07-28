@@ -74,6 +74,36 @@ class TestSkolemMinting:
         assert ogm.skolem_namespace == custom_ns
 
 
+class TestMintingAndRecognitionAgree:
+    """Everything minted must be recognisable, or the fetch guard silently stops working.
+
+    Only the minting *authority* is an open governance decision. The `/.well-known/genid/` path
+    is fixed by RDF 1.1 Concepts section 3.5's recognisability provision, so a namespace that
+    omits it is rejected rather than quietly producing unrecognisable addresses.
+    """
+
+    def test_a_namespace_without_the_well_known_path_is_rejected(self):
+        with pytest.raises(ValueError, match=WELL_KNOWN_GENID_PATH):
+            mint_skolem_iri("https://example.org/anon/")
+
+    def test_the_ogm_rejects_such_a_namespace_at_construction(self, mock_db):
+        """Fail when the OGM is built, not on the first anonymous write."""
+        with pytest.raises(ValueError, match=WELL_KNOWN_GENID_PATH):
+            OGM(db=mock_db, skolem_namespace="https://example.org/anon/")
+
+    @pytest.mark.parametrize(
+        "namespace",
+        [
+            DEFAULT_SKOLEM_NAMESPACE,
+            "https://example.org/.well-known/genid/",
+            "https://sfb1574.kit.edu/.well-known/genid/",
+            "https://example.org/.well-known/genid",  # no trailing slash
+        ],
+    )
+    def test_every_accepted_namespace_mints_a_recognisable_iri(self, namespace):
+        assert is_skolem_iri(mint_skolem_iri(namespace))
+
+
 class TestFetchGuardAgainstAnonymousNodes:
     """Test OGM.fetch guard against Skolem (anonymous) IRIs."""
 

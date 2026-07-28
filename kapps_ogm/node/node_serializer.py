@@ -9,6 +9,7 @@ from graph_db_interface import IRI, to_literal
 from graph_db_interface.utils.types import Triple
 
 from kapps_ogm.utils.errors import UnresolvableNodeAddressError
+from kapps_ogm.utils.skolem import WELL_KNOWN_GENID_PATH
 
 if TYPE_CHECKING:
     from .core import Node
@@ -113,10 +114,19 @@ def to_json_ld(
         for prefix, namespace in context.items():
             IRI.add_prefix(prefix, namespace)
 
+    def is_anonymous_ref(ref: str) -> bool:
+        """Whether a reference stands in for a blank node and should therefore be inlined.
+
+        A Skolem IRI *is* a blank node's stand-in (RDF 1.1 Concepts §3.5), so it inlines exactly
+        as the blank node it replaced did. Keeping it inline also keeps the address out of this
+        projection, which R4 requires of everything served northbound.
+        """
+        return ref.startswith("genid-") or WELL_KNOWN_GENID_PATH in ref
+
     def compact_iri(iri_str: str) -> str:
         """Compact a full IRI to prefix:name form if possible."""
-        if iri_str.startswith("genid-"):
-            return iri_str  # Don't compact blank nodes
+        if is_anonymous_ref(iri_str):
+            return iri_str  # Don't compact blank nodes or their Skolem stand-ins
         try:
             iri = IRI(iri_str)
             return iri.short
@@ -187,7 +197,7 @@ def to_json_ld(
             elif isinstance(value, dict) and "@id" in value:
                 # Check if this is a blank node reference
                 ref_id = value["@id"]
-                if ref_id in subjects and ref_id.startswith("genid-"):
+                if ref_id in subjects and is_anonymous_ref(ref_id):
                     # Inline the blank node
                     blank_node_data = subjects[ref_id].copy()
                     # Don't include @id for inline blank nodes
@@ -205,12 +215,12 @@ def to_json_ld(
                         if isinstance(item, dict)
                         and "@id" in item
                         and item["@id"] in subjects
-                        and item["@id"].startswith("genid-")
+                        and is_anonymous_ref(item["@id"])
                         else (
                             inline_blank_nodes(subjects[item["@id"]].copy())
                             if isinstance(item, dict)
                             and "@id" in item
-                            and item["@id"].startswith("genid-")
+                            and is_anonymous_ref(item["@id"])
                             else item
                         )
                     )
@@ -232,7 +242,7 @@ def to_json_ld(
 
     # Add other named (non-blank) nodes
     for subj, props in subjects.items():
-        if subj != main_subject and not str(subj).startswith("genid-"):
+        if subj != main_subject and not is_anonymous_ref(str(subj)):
             json_node = {"@id": compact_iri(subj)}
             json_node.update(inline_blank_nodes(props))
             json_ld_nodes.append(json_node)

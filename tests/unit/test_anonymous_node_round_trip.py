@@ -21,6 +21,7 @@ from kapps_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
 from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from kapps_ogm.node.core import Node
 from kapps_ogm.node.node_address import reconcile_anonymous_addresses
+from kapps_ogm.utils.errors import AmbiguousNodeAlignmentError
 
 ONTO = "https://www.sfb1574.kit.edu/ontologies/TransferUnit"
 CONVEYOR_BELT = IRI("ConveyorBelt", ONTO)
@@ -235,6 +236,63 @@ class TestAddressReconciliation:
         new = Node(
             id=BELT_IRI,
             data={HAS_SPEED: [{HAS_VALUE: [1.4]}, {HAS_VALUE: [9.9]}]},
+            ogm=ogm_with_mock_db,
+        )
+
+        reconcile_anonymous_addresses(old=old, new=new)
+
+        assert new.data[HAS_SPEED][0].id == SKOLEM_IRI
+        assert new.data[HAS_SPEED][1].id is None
+
+    def test_dropping_one_of_several_values_raises_rather_than_shifting(
+        self, ogm_with_mock_db
+    ):
+        """Alignment is positional, so a shortened list would silently misassign addresses.
+
+        Shifting the second node's address onto the first does not merely lose an address — it
+        moves one parameter's properties onto another parameter's node. That is worse than the
+        failure R3 forbids, so it fails loudly instead.
+        """
+        old = Node(
+            id=BELT_IRI,
+            data={
+                HAS_SPEED: [
+                    {"id": SKOLEM_IRI, HAS_VALUE: [1.5]},
+                    {"id": OTHER_SKOLEM_IRI, HAS_VALUE: [2.5]},
+                ]
+            },
+            ogm=ogm_with_mock_db,
+        )
+        new = Node(
+            id=BELT_IRI, data={HAS_SPEED: [{HAS_VALUE: [2.5]}]}, ogm=ogm_with_mock_db
+        )
+
+        with pytest.raises(AmbiguousNodeAlignmentError, match="hasConveyorSpeed"):
+            reconcile_anonymous_addresses(old=old, new=new)
+
+    def test_clearing_a_single_valued_property_is_unambiguous(self, ogm_with_mock_db):
+        """Nothing is left to align, so there is nothing to misassign."""
+        old = Node(
+            id=BELT_IRI,
+            data={HAS_SPEED: [{"id": SKOLEM_IRI, HAS_VALUE: [1.5]}]},
+            ogm=ogm_with_mock_db,
+        )
+        new = Node(id=BELT_IRI, data={HAS_SPEED: []}, ogm=ogm_with_mock_db)
+
+        reconcile_anonymous_addresses(old=old, new=new)
+
+        assert new.data[HAS_SPEED] == []
+
+    def test_appending_a_value_is_unambiguous(self, ogm_with_mock_db):
+        """A longer list still aligns on its prefix; the extra is genuinely new."""
+        old = Node(
+            id=BELT_IRI,
+            data={HAS_SPEED: [{"id": SKOLEM_IRI, HAS_VALUE: [1.5]}]},
+            ogm=ogm_with_mock_db,
+        )
+        new = Node(
+            id=BELT_IRI,
+            data={HAS_SPEED: [{HAS_VALUE: [1.5]}, {HAS_VALUE: [9.9]}]},
             ogm=ogm_with_mock_db,
         )
 

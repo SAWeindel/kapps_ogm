@@ -227,6 +227,33 @@ class TestResolvingExistingAddress:
         assert triples1 == triples2
 
 
+class TestJsonLdProjection:
+    """R4: the address must not leak northbound, and JSON-LD is a northbound projection."""
+
+    def _belt_json_ld(self, belt_spec: ClassSpec, ogm: OGM) -> dict:
+        node = Node(
+            id=BELT_IRI,
+            class_spec=belt_spec,
+            ogm=ogm,
+            data={HAS_SPEED: [{HAS_UNIT: ["m/s"], HAS_VALUE: [1.4]}]},
+        )
+        node.materialize()
+        return node.to_json_ld()
+
+    def test_the_anonymous_node_is_still_inlined(self, belt_spec, ogm_with_mock_db):
+        """A Skolem IRI stands in for a blank node, so it inlines exactly as one did."""
+        json_ld = self._belt_json_ld(belt_spec, ogm_with_mock_db)
+
+        assert len(json_ld["@graph"]) == 1
+        speed = json_ld["@graph"][0][HAS_SPEED.short]
+        assert speed[HAS_UNIT.short] == "m/s"
+
+    def test_the_address_never_appears_in_the_json_ld(self, belt_spec, ogm_with_mock_db):
+        json_ld = self._belt_json_ld(belt_spec, ogm_with_mock_db)
+
+        assert "/.well-known/genid/" not in str(json_ld)
+
+
 class TestUnresolvableAddressRaises:
     """Tests that unresolvable addresses raise rather than minting."""
 

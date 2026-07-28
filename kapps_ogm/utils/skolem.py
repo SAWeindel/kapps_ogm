@@ -29,6 +29,35 @@ WELL_KNOWN_GENID_PATH = "/.well-known/genid/"
 DEFAULT_SKOLEM_NAMESPACE = "https://w3id.org/circularfactory/.well-known/genid/"
 
 
+def validate_skolem_namespace(namespace: str) -> str:
+    """Normalise a namespace and check it will mint IRIs this module can recognise again.
+
+    Only the minting *authority* is an open governance decision; the `/.well-known/genid/` path
+    is fixed by section 3.5's recognisability provision. A namespace omitting it would mint
+    addresses that `is_skolem_iri` cannot identify, which would silently disable the guard in
+    `OGM.fetch` — so it is rejected here rather than surfacing as a missing check later.
+
+    Args:
+        namespace: The candidate namespace. A missing trailing '/' is supplied.
+
+    Returns:
+        The namespace in canonical form, with a trailing '/'.
+
+    Raises:
+        ValueError: If the namespace does not contain WELL_KNOWN_GENID_PATH.
+    """
+    if not namespace.endswith("/"):
+        namespace = namespace + "/"
+    if WELL_KNOWN_GENID_PATH not in namespace:
+        raise ValueError(
+            f"Skolem namespace {namespace!r} must contain {WELL_KNOWN_GENID_PATH!r}. "
+            "RDF 1.1 Concepts section 3.5 fixes that path so a Skolem IRI is recognisable "
+            "outside the system that minted it; only the authority preceding it is yours to "
+            "choose."
+        )
+    return namespace
+
+
 def mint_skolem_iri(namespace: str = DEFAULT_SKOLEM_NAMESPACE) -> IRI:
     """Mint a new Skolem IRI for an anonymous node.
 
@@ -39,9 +68,11 @@ def mint_skolem_iri(namespace: str = DEFAULT_SKOLEM_NAMESPACE) -> IRI:
     Returns:
         A new IRI instance containing the namespace followed by a UUID hex string.
         Each call produces a unique value that will never be reused.
+
+    Raises:
+        ValueError: If the namespace would mint an unrecognisable IRI.
     """
-    if not namespace.endswith("/"):
-        namespace = namespace + "/"
+    namespace = validate_skolem_namespace(namespace)
     unique_id = uuid.uuid4().hex
     return IRI(f"{namespace}{unique_id}")
 

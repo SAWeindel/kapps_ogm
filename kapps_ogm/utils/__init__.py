@@ -9,6 +9,18 @@ from .pretty_print import (
 )
 from .json_ogm_encoder import OGMEncoder
 from .class_scope import ClassScope
+from .errors import (
+    AmbiguousNodeAlignmentError,
+    AnonymousNodeFetchError,
+    UnresolvableNodeAddressError,
+)
+from .skolem import (
+    DEFAULT_SKOLEM_NAMESPACE,
+    WELL_KNOWN_GENID_PATH,
+    is_skolem_iri,
+    mint_skolem_iri,
+    validate_skolem_namespace,
+)
 
 __all__ = [
     "PROPERTY_TYPES",
@@ -19,4 +31,12 @@ __all__ = [
     "format_class_spec",
     "OGMEncoder",
     "ClassScope",
+    "AmbiguousNodeAlignmentError",
+    "AnonymousNodeFetchError",
+    "UnresolvableNodeAddressError",
+    "DEFAULT_SKOLEM_NAMESPACE",
+    "WELL_KNOWN_GENID_PATH",
+    "is_skolem_iri",
+    "mint_skolem_iri",
+    "validate_skolem_namespace",
 ]

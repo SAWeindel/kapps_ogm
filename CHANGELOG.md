@@ -102,6 +102,33 @@
   range, so `_value_to_triples` took the stable-IRI branch. The `COMPLEX` update path now
   has coverage.
 
+- **Review follow-ups, all in the same change.** `mint_skolem_iri` accepted any namespace while
+  `is_skolem_iri` required the literal `/.well-known/genid/` path, so an `OGM` configured with a
+  namespace off the default minted addresses its own guard could not recognise — silently
+  disarming the `AnonymousNodeFetchError` check in `OGM.fetch`. `validate_skolem_namespace` now
+  normalises the trailing slash and rejects a namespace lacking the well-known path, at `OGM`
+  construction rather than on the first anonymous write; only the authority preceding that path
+  was ever configurable, since §3.5 fixes the path itself.
+
+  `to_json_ld` decided what to inline by testing `startswith("genid-")`, the blank-node label
+  form, so a skolemised parameter stopped being inlined and its address surfaced in a northbound
+  projection — a leak R4 forbids, and a change to the served shape. All five inlining decisions
+  now route through one `is_anonymous_ref` predicate that treats a Skolem IRI as what §3.5 says
+  it is: a blank node's stand-in.
+
+  `reconcile_anonymous_addresses` aligns anonymous values by position, which is unambiguous for
+  an appended or edited list but not for a shortened one: nothing says which stored node was
+  dropped, and aligning by position would shift a surviving node's address onto the wrong entry,
+  moving one parameter's properties onto another parameter's node. That is a worse failure than
+  losing an address, so it now raises `AmbiguousNodeAlignmentError` rather than guessing.
+  Clearing a property entirely stays legal — there is nothing left to misassign. Reordering an
+  equal-length list is still undetectable from position alone and is documented as such; closing
+  it needs content-based matching, which is not warranted while parameter properties are
+  effectively single-valued.
+
+  `kapps_ogm/utils/__init__.py` now re-exports the new errors and Skolem helpers, matching how
+  `constants`, `pretty_print`, `json_ogm_encoder` and `class_scope` are already surfaced.
+
 - **`ogm.py` called `format_triples_turtle` without importing it, so `OGM.commit` raised
   `NameError` whenever the logger was enabled for `DEBUG`.** The call sits inside an
   `isEnabledFor(DEBUG)` guard, which is why it had gone unnoticed: the suite never

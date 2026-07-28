@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 from graph_db_interface import IRI
 
+from kapps_ogm.utils.errors import AmbiguousNodeAlignmentError
+
 if TYPE_CHECKING:
     from .core import Node
 
@@ -29,9 +31,18 @@ def reconcile_anonymous_addresses(*, old: "Node", new: "Node") -> None:
     yet, so leaving the new one unaddressed relocates it to a Skolem IRI on this write — a
     one-time migration, after which its address is stable.
 
+    Known limitation: alignment is by position, so a caller who *reorders* an equal-length list of
+    anonymous values silently swaps their addresses. A shortened list is refused outright (see
+    ``AmbiguousNodeAlignmentError``), but reordering is not detectable from position alone.
+    Matching on declared content instead would close this; it is not needed while parameter
+    properties are effectively single-valued.
+
     Args:
         old: The node as fetched from the store, carrying the authoritative addresses.
         new: The node about to be written. Mutated in place.
+
+    Raises:
+        AmbiguousNodeAlignmentError: If a property's outgoing list is shorter than the stored one.
     """
     from .core import Node
 
@@ -42,6 +53,17 @@ def reconcile_anonymous_addresses(*, old: "Node", new: "Node") -> None:
         old_values = old.data.get(property_iri)
         if not old_values:
             continue
+
+        # A shortened list cannot be aligned: nothing says which of the stored nodes was dropped,
+        # and aligning by position would shift a surviving node's address onto the wrong entry.
+        # An emptied list is exempt — there is nothing left to align, so nothing to misassign.
+        if new_values and len(new_values) < len(old_values):
+            raise AmbiguousNodeAlignmentError(
+                f"Cannot align {len(new_values)} value(s) of {property_iri} on {new.id} against "
+                f"the {len(old_values)} currently stored: anonymous nodes are matched by "
+                "position, so it is not determinable which was removed. Commit the full list, "
+                "or clear the property entirely."
+            )
 
         for index, new_value in enumerate(new_values):
             if index >= len(old_values):

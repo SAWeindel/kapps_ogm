@@ -14,6 +14,17 @@ class AnonymousNodeFetchError(ValueError):
     pass
 
 
+class AmbiguousNodeAlignmentError(ValueError):
+    """Raised when a fetched node's anonymous values cannot be aligned with the outgoing ones.
+
+    Anonymous nodes under one property are aligned positionally, since nothing else distinguishes
+    them. When the outgoing list is shorter than the stored one, there is no way to tell which
+    node was dropped, and guessing would shift a surviving node's address onto the wrong entry —
+    silently moving one parameter's properties onto another parameter's node. That is a worse
+    failure than losing an address, so it is refused.
+    """
+
+
 class UnresolvableNodeAddressError(ValueError):
     """Raised on the write path when the RDF address of an anonymous node cannot be resolved.
 

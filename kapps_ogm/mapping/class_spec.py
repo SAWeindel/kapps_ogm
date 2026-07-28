@@ -11,6 +11,7 @@ from pydantic import ConfigDict  # Pydantic v2
 
 from graph_db_interface import IRI
 from kapps_ogm.utils.pretty_print import format_class_spec
+from kapps_ogm.mapping.anonymous_model import AnonymousNodeModel
 from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from kapps_ogm.utils.class_scope import ClassScope
 
@@ -95,9 +96,17 @@ class ClassSpec:
         model_name = (
             self.iri.lined if self.iri else "AnonymousClass"
         )  # TODO: use graphdbs blanknode generator?
+
+        # An anonymous class has no id field, so its node's address has nowhere to live in the
+        # projection. AnonymousNodeModel carries it out of band instead. An explicitly configured
+        # base is left alone — pydantic_base_model is the documented seam for overriding this.
+        base_model = self.pydantic_base_model
+        if self.iri is None and base_model is pd.BaseModel:
+            base_model = AnonymousNodeModel
+
         model_cls = pd.create_model(
             model_name,
-            __base__=(self.pydantic_base_model,),
+            __base__=(base_model,),
             **fields,
         )  # type: ignore[call-overload] #TODO: is baseModel correct base here?
 

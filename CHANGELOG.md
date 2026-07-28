@@ -2,6 +2,112 @@
 
 ## Unreleased
 
+### Added
+
+- **Four new modules implement Skolemised identity for anonymous nodes, per
+  SAWeindel/kapps_ogm#6 and PRD requirements R1–R6.** The specification lives at
+  `docs/prd/kapps-ogm-anonymous-node-identity.md` in `EHoffm/kapps_semantic_middleware`.
+  `kapps_ogm/utils/skolem.py` provides `mint_skolem_iri()` and `is_skolem_iri()`, plus
+  `WELL_KNOWN_GENID_PATH` and `DEFAULT_SKOLEM_NAMESPACE`. The path begins
+  `/.well-known/genid/` per RDF 1.1 Concepts §3.5's recognisability provision, so a third
+  party can tell the IRI stands in for a blank node; the minting authority is an
+  ontology-governance decision not yet settled, so the namespace is configurable per `OGM`
+  instance via a new `skolem_namespace` constructor argument and the default is documented
+  as a placeholder. `kapps_ogm/mapping/anonymous_model.py` introduces `AnonymousNodeModel`,
+  wired through the existing `ClassSpec.pydantic_base_model` seam; it carries the node's
+  address in a pydantic `PrivateAttr`, captured from the payload's `id` key by a
+  `mode="wrap"` model validator that pops the key before field validation. Verified on
+  pydantic 2.13: private attributes are absent from `model_dump()`, `model_dump_json()`
+  and `model_json_schema()`, so the address cannot leak northbound, into OpenAPI, or into
+  `to_triples`; it does not survive a dump-then-revalidate round trip, which is why it is
+  a mirror and `Node.data` remains the authoritative carrier. `kapps_ogm/node/node_address.py`
+  exports `reconcile_anonymous_addresses()`, which copies addresses from the fetched node
+  onto the node about to be written. `kapps_ogm/utils/errors.py` adds
+  `AnonymousNodeFetchError` and `UnresolvableNodeAddressError`.
+
+### Fixed
+
+- **Anonymous nodes lost their identity on every write; they are now Skolemised.** The
+  anonymous node behind a `COMPLEX` property — every parameter node in the Circular Factory
+  — had no identity that survived a write. Identity was destroyed three times over:
+  `OGM._fetch_complex_property` (`ogm.py`) grouped the query result by node and then
+  returned `list(property_data_dict.values())`, discarding the key, so identity died at
+  read; `format_for_instance` called `_assign_id`, which for an anonymous ClassSpec minted
+  `db.new_blank_id()`, but pydantic ignored the `id` key entirely because an anonymous
+  model has no `id` field; and `_value_to_triples` (`node_serializer.py`) minted another
+  fresh `BNode` for any nested model without an `id` — on both sides of the diff. `Node.diff`
+  therefore compared blank-node groups whose labels never matched, so a commit deleted the
+  whole old group and inserted a new one. Because `graph_db_interface.triples_update`
+  renders blank nodes as SPARQL variables, the DELETE matched the real node by structure,
+  unlinking it and orphaning every triple the ClassSpec did not declare. A no-change commit
+  was not a no-op. This was reproduced live on the ticket: after committing a speed value,
+  the parameter node had moved, and three MQTT connection-metadata triples were left on a
+  node with no inbound edge — while the call reported success.
+
+  The fix skolemises. A blank node is an existential variable: it has no extent, cannot be
+  addressed, and can only be re-found by matching a pattern from a named subject — which is
+  exactly what made the write destructive. RDF 1.1 Concepts §3.5 sanctions replacing it with
+  a Skolem IRI: the transformation does not appreciably change the meaning of an RDF graph,
+  and it permits the possibility of other graphs subsequently using the Skolem IRIs, which
+  is not possible for blank nodes. That second property is the requirement — PROV
+  qualification, SHACL focus nodes and joining a history snapshot to live state are all
+  impossible against a blank node. Two conditions attach to the guarantee and are honoured
+  as normative rules: the IRIs are globally unique and never reused, and nothing is asserted
+  about the node — no `rdf:type`, no class membership, no annotation. `to_triples` already
+  satisfied the type half, since it emits type triples only when `class_spec.iri` is set and
+  an anonymous ClassSpec has `iri=None`.
+
+  `_fetch_complex_property` now keeps the identifier it already had, returning it as an
+  `"id"` entry per group, and returns groups sorted by identifier so two fetches of
+  unchanged data align positionally; `sanitize_data` passes an `IRI` or `BNode` through
+  verbatim instead of coercing it. `_assign_id` mints a Skolem IRI for an anonymous
+  ClassSpec instead of `db.new_blank_id()`. `_value_to_triples` no longer mints at all; it
+  resolves the target in order — the address recorded in `Node.data`, then the `_node_iri`
+  mirror on the model — otherwise it raises `UnresolvableNodeAddressError`. An unresolvable
+  target must never silently become a new node. `OGM.commit` now fetches the old node before
+  materializing the new one and reconciles addresses between them; this is load-bearing
+  rather than incidental, since the canonical usage pattern is `fetch(materialize=True)` →
+  `model_dump()` → edit → `commit(data=<plain dict>)`, and the dump deliberately carries no
+  address, so it must be recovered from the store side. `OGM.fetch` on a Skolem IRI now
+  raises `AnonymousNodeFetchError` naming the situation ("anonymous node — fetch its parent")
+  before touching the database, rather than failing later with `ValueError: Could not
+  determine class IRI`. The diff needed no change: with an IRI subject,
+  `group_triples_by_bnode` puts each triple in its own group, so the diff reduces to what
+  actually changed and stays one atomic DELETE/INSERT.
+
+  A parameter node already in the store as a real blank node is relocated once, to a Skolem
+  IRI, on the next write that touches it; the old side of that one transaction still names
+  the blank node, so the relocation is a single atomic DELETE/INSERT. Undeclared triples on
+  such a node are not carried across that one relocation — the ClassSpec does not know about
+  them — so a legacy node loses them exactly once. This is bounded in practice because only
+  the TBox is seeded in productive environments; all ABox data is written through the OGM
+  and is therefore skolemised from the outset. Converting a whole resource up front, and the
+  inverse deskolemise, are #9 (PRD R12). Merging the interface restrictions so that
+  connection metadata becomes declared — which is what stops even that one-time loss — is
+  #7 (PRD R7). Entity deletion stays unsupported; canonical (isomorphism-preserving)
+  Skolemisation is explicitly not what was built, since identity here is per node, not
+  derived from content, which is what a locator needs.
+
+  Five new unit test files, 72 tests, all offline against the existing `mock_db` fixture:
+  `test_skolem_identity.py` (minting, recognition, the fetch guard),
+  `test_anonymous_node_model.py` (projection invariance), `test_anonymous_node_addressing.py`
+  (`to_triples` address resolution), `test_anonymous_node_round_trip.py` (identity at read,
+  reconciliation, `Node.diff`), and `test_commit_round_trip.py`, which drives the full
+  `fetch` → `model_dump` → edit → `commit` pattern and asserts the ticket's acceptance
+  criteria directly: an unchanged commit writes zero triples, a changed value emits exactly
+  one DELETE and one INSERT naming the node's IRI, the belt→parameter link is never
+  unlinked, and no blank node reaches the write path. The suite is 155 tests, all passing.
+  The ticket noted that this was never caught because `scripts/demo_update_value.py`
+  exercises only the named-class `OBJECT` path — `demo:hasConveyorPosition` has a named-class
+  range, so `_value_to_triples` took the stable-IRI branch. The `COMPLEX` update path now
+  has coverage.
+
+- **`ogm.py` called `format_triples_turtle` without importing it, so `OGM.commit` raised
+  `NameError` whenever the logger was enabled for `DEBUG`.** The call sits inside an
+  `isEnabledFor(DEBUG)` guard, which is why it had gone unnoticed: the suite never
+  commits at `DEBUG`. Found by static analysis while reordering `commit`, not by hitting it.
+  Added the missing import.
+
 ### Removed
 
 - **`tests/integration/test_roundtrip.py`, the repository's only integration test,

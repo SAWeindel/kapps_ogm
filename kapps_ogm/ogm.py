@@ -8,11 +8,19 @@ from graph_db_interface import GraphDB, IRI
 from graph_db_interface.utils.types import GraphNameLike
 
 from kapps_ogm.node.core import Node
+from kapps_ogm.node.node_address import reconcile_anonymous_addresses
 from kapps_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
 from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from kapps_ogm.utils.blank_instance import _create_blank_instance
 from kapps_ogm.utils.loader_strategy import LoaderStrategy
 from kapps_ogm.utils.class_scope import ClassScope
+from kapps_ogm.utils.errors import AnonymousNodeFetchError
+from kapps_ogm.utils.pretty_print import format_triples_turtle
+from kapps_ogm.utils.skolem import (
+    DEFAULT_SKOLEM_NAMESPACE,
+    is_skolem_iri,
+    mint_skolem_iri,
+)
 
 
 class OGM:
@@ -27,16 +35,22 @@ class OGM:
         loader: Optional[LoaderStrategy] = None,
         logger: Optional[logging.Logger] = None,
         naming_schema: Optional[Callable[[], str]] = None,
+        skolem_namespace: str = DEFAULT_SKOLEM_NAMESPACE,
     ):
         """
         Args:
             db: GraphDB interface
 
             loader: LoaderStrategy that takes an IRI and returns property chains for selective instance loading. if not specified, property chains need to be provided at fetch/creation time.
+
+            skolem_namespace: Namespace under which Skolem IRIs are minted for anonymous nodes.
+                The minting authority is an ontology-governance decision, so this is configurable;
+                the default is a placeholder whose path starts with ``/.well-known/genid/``.
         """
         self.db = db
         self.loader = loader
         self.naming_schema = naming_schema
+        self.skolem_namespace = skolem_namespace
         self.logger = logger or logging.getLogger("kapps_ogm")
         self.logger.setLevel(logging.INFO)
 
@@ -165,7 +179,12 @@ class OGM:
         if model_iri:
             instance_id = self.db.new_iri(base=model_iri, schema=self.naming_schema)
         else:
-            instance_id = self.db.new_blank_id()
+            # An anonymous node gets a Skolem IRI rather than a blank node. A blank node has no
+            # extent and cannot be addressed, so it can only be re-found by matching a pattern
+            # from a named subject — which is what makes the write path destructive. RDF 1.1
+            # Concepts §3.5 sanctions the substitution; nothing is asserted about the IRI, so the
+            # meaning of the graph is unchanged.
+            instance_id = mint_skolem_iri(self.skolem_namespace)
         node.id = instance_id
 
     # ------------------------------------------------------------------
@@ -189,6 +208,15 @@ class OGM:
         """
         Helper function to fetch complex property data for a given instance and property spec.
         All properties attached to the complex class are fetched.
+
+        Each returned group carries an ``"id"`` entry holding the node's own identifier — an IRI
+        once the node has been skolemised, a BNode while it is still in the store's blank-node
+        form. Discarding it, as this used to, is where identity died: the write path then had no
+        way to address the node it had just read, so it minted a replacement and orphaned every
+        triple this query returned but the ClassSpec does not declare.
+
+        Groups come back ordered by identifier so that two fetches of unchanged data align
+        positionally, which is what ``reconcile_anonymous_addresses`` relies on.
         """
         # Re-query anonymous node, this time including properties
         query = f"""
@@ -207,18 +235,22 @@ class OGM:
         if not query_result:
             return []
 
-        property_data_dict = {}
+        property_data_dict: dict[str, dict] = {}
         for binding in query_result:
-            bnode = str(binding["bnode"])
+            node_ref = binding["bnode"]
             prop_iri = IRI(str(binding["property"]))
             value = binding["value"]
 
-            property_data_dict.setdefault(bnode, {})
-            property_data_dict[bnode].setdefault(prop_iri, [])
-            property_data_dict[bnode][prop_iri].append(value)
+            # Key on the string form, but keep the identifier object itself: it is the node's
+            # address, and an IRI must stay an IRI while a blank node must stay a BNode.
+            group = property_data_dict.setdefault(str(node_ref), {"id": node_ref})
+            group.setdefault(prop_iri, [])
+            group[prop_iri].append(value)
 
-        # [{property_iri: [value1, value2, ...], ...}, ...]
-        property_data: list[dict[IRI, list[Any]]] = list(property_data_dict.values())
+        # [{"id": <IRI|BNode>, property_iri: [value1, value2, ...], ...}, ...]
+        property_data: list[dict[IRI, list[Any]]] = [
+            property_data_dict[key] for key in sorted(property_data_dict)
+        ]
         return property_data
 
     def _fetch_object_property(
@@ -272,7 +304,19 @@ class OGM:
 
         Returns:
             Node representing the fetched instance
+
+        Raises:
+            AnonymousNodeFetchError: If instance_iri is a Skolem IRI. Such a node is anonymous:
+                nothing is asserted about it, so it has no rdf:type to resolve a ClassSpec from,
+                and it is only meaningful as part of the entity that carries it.
         """
+        if is_skolem_iri(instance_iri):
+            raise AnonymousNodeFetchError(
+                f"{instance_iri} is an anonymous node — fetch its parent instead. "
+                "Anonymous nodes carry no rdf:type and are only reachable through the "
+                "property that points at them."
+            )
+
         if class_scope is None and self.loader is not None:
             class_scope = self.loader.expand(instance_iri)
 
@@ -385,14 +429,22 @@ class OGM:
         )
 
         new_node.class_spec = class_spec
-        new_node.materialize()
 
+        # Fetch before materializing, so the addresses of the anonymous nodes already in the store
+        # can be transferred onto the node about to be written. The caller's payload cannot carry
+        # them: the address is deliberately absent from the pydantic projection, so a fetch,
+        # model_dump(), edit, commit cycle arrives here with none. Without this the commit would
+        # mint fresh addresses, delete the existing nodes and strand every triple the ClassSpec
+        # does not declare — connection metadata included — on nodes nothing points at.
         old_node = self.fetch(
             instance_iri=instance_iri,
             class_spec=new_node.class_spec,
             class_scope=class_scope,
             materialize=True,
         )
+        reconcile_anonymous_addresses(old=old_node, new=new_node)
+
+        new_node.materialize()
 
         old_triples, new_triples = old_node.diff(other=new_node)
 

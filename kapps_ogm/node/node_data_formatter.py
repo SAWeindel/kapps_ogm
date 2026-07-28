@@ -1,9 +1,10 @@
 """Data formatting and sanitization utilities for Node instances."""
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 import logging
 
+from rdflib import BNode
 from graph_db_interface import IRI
 
 if TYPE_CHECKING:
@@ -18,7 +19,7 @@ def sanitize_data(
     data: Dict,
     node: "Node",
     known_nodes: Optional[Dict[int, "Node"]] = None,
-) -> tuple[dict[IRI, List[Any]], IRI]:
+) -> tuple[dict[IRI, List[Any]], Optional[Union[IRI, BNode]]]:
     """
     Recursively converts provided data dict into a unified format.
 
@@ -34,7 +35,8 @@ def sanitize_data(
         ogm: OGM instance for creating nested Node instances.
 
     Returns:
-        tuple[dict[IRI, List[Any]], IRI]: Sanitized data with IRI keys and list values, and the node ID.
+        tuple[dict[IRI, List[Any]], Optional[Union[IRI, BNode]]]: Sanitized data with IRI keys and
+            list values, and the node ID if the data carried one.
 
     Raises:
         ValueError: If data cannot be converted into the expected format.
@@ -50,7 +52,14 @@ def sanitize_data(
     for property_iri, domain_list in data.items():
         # Catch special cases
         if property_iri == "id":
-            node_id = IRI(domain_list)
+            # An anonymous node fetched from the store arrives already identified — as an IRI once
+            # skolemised, as a BNode while still in the store's blank-node form. Either is the
+            # node's actual address and must survive verbatim.
+            node_id = (
+                domain_list
+                if isinstance(domain_list, (IRI, BNode))
+                else IRI(domain_list)
+            )
             continue
 
         try:

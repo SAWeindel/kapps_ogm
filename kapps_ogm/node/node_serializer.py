@@ -8,6 +8,8 @@ from rdflib import BNode, Literal
 from graph_db_interface import IRI, to_literal
 from graph_db_interface.utils.types import Triple
 
+from kapps_ogm.utils.errors import UnresolvableNodeAddressError
+
 if TYPE_CHECKING:
     from .core import Node
 
@@ -62,12 +64,18 @@ def to_triples(self: "Node") -> set[Triple]:
         # Always treat as list
         values = value if isinstance(value, list) else [value]
 
-        for v in values:
+        # Node.data is the authoritative carrier of an anonymous node's address. Its entries are
+        # positionally aligned with the materialized instance's, because format_for_instance
+        # builds the payload by walking the same lists in the same order.
+        data_values = (self.data or {}).get(prop_iri) or []
+
+        for index, v in enumerate(values):
             triples |= _value_to_triples(
                 self=self,
                 subject=subject,
                 predicate=prop_iri,
                 value=v,
+                data_node=data_values[index] if index < len(data_values) else None,
             )
 
     return triples
@@ -232,24 +240,81 @@ def to_json_ld(
     return {"@context": context or {}, "@graph": json_ld_nodes}
 
 
+def _resolve_anonymous_address(
+    self: "Node",
+    predicate: IRI,
+    value: Any,
+    data_node: Any,
+) -> Any:
+    """
+    Resolve the RDF address of an anonymous nested node. Never mints one.
+
+    An anonymous node is addressed rather than re-created, so that a write touches only what
+    actually changed and leaves undeclared triples — MQTT topics, broker addresses, anything the
+    range restriction does not declare — attached to the node that carries them.
+
+    Resolution order:
+        1. ``Node.data`` — the authoritative carrier, populated at fetch and by ``_assign_id``.
+        2. the ``_node_iri`` mirror on an ``AnonymousNodeModel``, for a node not reachable through
+           ``Node.data`` (a doubly-nested anonymous node serializes from its instance alone).
+        3. raise.
+
+    Minting belongs to ``OGM._assign_id``, which runs only for a node that has no address yet.
+    Minting here would silently turn an unresolvable target into a new node and orphan every
+    triple the ClassSpec does not declare — the exact failure this resolution order exists to
+    prevent.
+
+    Args:
+        self: The parent Node instance.
+        predicate: The property IRI relating the parent to this value.
+        value: The nested Pydantic model being serialized.
+        data_node: The Node recorded for this value in the parent's data, if any.
+
+    Returns:
+        The resolved address, an IRI (or a BNode for a node still held in the store's blank-node
+        form, which the next write relocates to a Skolem IRI).
+
+    Raises:
+        UnresolvableNodeAddressError: If no address can be resolved.
+    """
+    from .core import Node
+
+    if isinstance(data_node, Node) and data_node.id is not None:
+        return data_node.id
+
+    mirrored_address = getattr(value, "_node_iri", None)
+    if mirrored_address is not None:
+        return mirrored_address
+
+    raise UnresolvableNodeAddressError(
+        f"Cannot resolve the address of the anonymous node under {predicate} on {self.id}. "
+        "It is absent from Node.data and carries no mirrored address, so writing it would "
+        "silently create a new node and orphan the triples attached to the existing one. "
+        "Materialize through the OGM (fetch or commit) so the address is carried."
+    )
+
+
 def _value_to_triples(
     self: "Node",
     subject: IRI,
     predicate: IRI,
     value: Any,
+    data_node: Any = None,
 ) -> set[Triple]:
     """
     Convert a property value into RDF triples.
 
-    Handles nested Pydantic objects (serialized to blank nodes or their own IRI),
-    IRI references (linked directly), and literals (converted with type annotations).
-    Nested objects are serialized recursively.
+    Handles nested Pydantic objects (serialized to their own IRI, or to the resolved address of
+    an anonymous node), IRI references (linked directly), and literals (converted with type
+    annotations). Nested objects are serialized recursively.
 
     Args:
         node: The parent Node instance (for accessing ogm).
         subject: The subject IRI for the generated triples.
         predicate: The property IRI relating subject to value.
         value: The value to serialize (Pydantic model, IRI, or primitive).
+        data_node: The Node recorded for this value in the parent's data, if any. Carries the
+            address of an anonymous node.
 
     Returns:
         set[Triple]: RDF triples representing the value. Single triple for
@@ -257,7 +322,7 @@ def _value_to_triples(
 
     Notes:
         - Internal helper called by to_triples()
-        - Blank nodes get fresh IDs on each serialization
+        - Anonymous nodes are addressed, never re-minted; see _resolve_anonymous_address.
     """
     from pydantic import BaseModel
     from .core import Node
@@ -272,8 +337,13 @@ def _value_to_triples(
             # Use the object's own IRI
             obj = nested_id if isinstance(nested_id, IRI) else IRI(nested_id)
         else:
-            # Create blank node for anonymous nested object
-            obj = BNode(self.ogm.db.new_blank_id())
+            # Anonymous nested object: resolve its address, never mint a replacement
+            obj = _resolve_anonymous_address(
+                self=self,
+                predicate=predicate,
+                value=value,
+                data_node=data_node,
+            )
 
         triples.add((subject, predicate, obj))
 
@@ -295,6 +365,9 @@ def _value_to_triples(
             id=obj,
             instance=value,
             class_spec=class_spec,  # Properties encoded in Pydantic model
+            # Carry the recorded data down so anonymous nodes nested below this one can resolve
+            # their own addresses from the authoritative carrier rather than the model mirror.
+            data=data_node.data if isinstance(data_node, Node) else None,
             ogm=self.ogm,
         )
         triples |= to_triples(nested_node)

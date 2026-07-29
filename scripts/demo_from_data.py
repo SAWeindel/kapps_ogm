@@ -132,6 +132,43 @@ def _scope_from_data(ogm: OGM, data: dict) -> ClassScope:
     return ClassScope.from_node_data(temp_node)
 
 
+class _DiffCapture(logging.Handler):
+    """Collects the one DEBUG record in which OGM.commit reports its triple diff."""
+
+    def __init__(self):
+        super().__init__(level=logging.DEBUG)
+        self.messages: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        message = record.getMessage()
+        if "Updating instance" in message:
+            self.messages.append(message)
+
+
+def _commit_printing_triple_diff(ogm: OGM, instance_iri: IRI, data: dict) -> Node:
+    """Commit `data`, printing the triple-level diff the write actually sends.
+
+    The "Diff for ..." comparisons check intent against result — that what came back out
+    equals what went in — so they say nothing about what *changed* in the store, which is
+    where the interesting behaviour is. OGM.commit already computes that diff and logs it
+    at DEBUG, so this captures the record rather than recomputing it here and drifting
+    from what is really written.
+    """
+    capture = _DiffCapture()
+    previous_level = ogm.logger.level
+    ogm.logger.setLevel(logging.DEBUG)
+    ogm.logger.addHandler(capture)
+    try:
+        node = ogm.commit(instance_iri=instance_iri, data=data)
+    finally:
+        ogm.logger.removeHandler(capture)
+        ogm.logger.setLevel(previous_level)
+
+    for message in capture.messages:
+        print(f"\n{message}")
+    return node
+
+
 def main():
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
@@ -174,7 +211,9 @@ def main():
 
     _print_diff("before_update", old_data, fetched_before_payload)
 
-    new_node = ogm.commit(instance_iri=old_node.id, data=new_data)
+    new_node = _commit_printing_triple_diff(
+        ogm, instance_iri=old_node.id, data=new_data
+    )
 
     fetched_after_update = ogm.fetch(
         instance_iri=old_node.id,

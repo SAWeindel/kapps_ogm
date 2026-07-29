@@ -43,16 +43,50 @@ def chain_ranges(prop_iri: IRI, range_var: str, ancestor_var: str = "?ancestor")
     )
 
 
-def _restriction_target(spec: "PropertySpec") -> Optional[Union[IRI, type]]:
-    """The datatype or class a restriction constrains values to.
+XSD_NAMESPACE = "http://www.w3.org/2001/XMLSchema#"
 
-    None for a cardinality-only restriction, which says nothing about the value's type and
-    therefore cannot conflict with one that does.
+# Datatypes that are not in the XSD namespace. rdfs:Literal is the top datatype, and the
+# other two are RDF's own.
+NON_XSD_DATATYPES = frozenset(
+    {
+        IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#XMLLiteral"),
+        IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#langString"),
+        IRI("http://www.w3.org/2000/01/rdf-schema#Literal"),
+    }
+)
+
+
+def _names_a_datatype(target: IRI) -> bool:
+    """Whether a restriction's target names a datatype rather than a class.
+
+    Decided by namespace, deliberately not by membership of `XSDToPythonTypes`. That map
+    covers 33 datatypes, so `xsd:gMonth`, `xsd:gDay` and `xsd:dateTimeStamp` are absent
+    from it — and reading a miss as "then it must be a class" would silently turn a
+    literal restriction into an object one.
     """
-    for candidate in (spec.python_range_type, spec.all_from, spec.some_from):
-        if candidate is not None:
-            return candidate
-    return None
+    return str(target).startswith(XSD_NAMESPACE) or target in NON_XSD_DATATYPES
+
+
+def _target_label(target: Union[IRI, type]) -> str:
+    """A restriction target as it should appear in an error message.
+
+    A resolved python type renders as `str` rather than `<class 'str'>`, which is closer
+    to the `xsd:string` the ontology author actually wrote.
+    """
+    return getattr(target, "__name__", str(target))
+
+
+def _satisfies_constraint(value: Any, constraint: Union[IRI, type]) -> bool:
+    """Whether one value meets a some/allValuesFrom constraint.
+
+    A class-valued constraint arrives as an IRI, and class membership cannot be decided
+    without the store, so the check is only that the value is a reference. It runs as a
+    BeforeValidator, ahead of pydantic's coercion, so a plain string that the `IRI` field
+    type would go on to accept has to pass here too — hence `str` rather than `IRI`.
+    """
+    if isinstance(constraint, IRI):
+        return isinstance(value, str)
+    return isinstance(value, constraint)
 
 
 def _tighten_bound(
@@ -82,6 +116,21 @@ class PropertySpec:
         if self.min_count is not None and self.min_count >= 1:
             return True
         return False
+
+    @property
+    def restriction_target(self) -> Optional[Union[IRI, Type]]:
+        """The datatype or class this restriction constrains values to.
+
+        None for a cardinality-only restriction, which says nothing about the value's type
+        and so cannot conflict with one that does. `python_range_type` and `all_from` are
+        mutually exclusive as built by `_specify_complex_property` — one holds a resolved
+        datatype, the other a class IRI — so the order below only decides which a
+        hand-built spec reports.
+        """
+        for candidate in (self.python_range_type, self.all_from, self.some_from):
+            if candidate is not None:
+                return candidate
+        return None
 
     def to_string(self) -> str:
         from ..utils.pretty_print import format_property_spec
@@ -214,22 +263,16 @@ class PropertySpec:
                     return v
                 values = v if isinstance(v, list) else [v]
 
-                def satisfies(x, constraint) -> bool:
-                    # A class-valued constraint arrives as an IRI, and class membership
-                    # cannot be decided without the store, so the strongest check available
-                    # here is that the value is a reference at all.
-                    if isinstance(constraint, IRI):
-                        return isinstance(x, IRI)
-                    return isinstance(x, constraint)
-
                 if self.some_from is not None:
-                    if not any(satisfies(x, self.some_from) for x in values):
+                    if not any(
+                        _satisfies_constraint(x, self.some_from) for x in values
+                    ):
                         raise ValueError(
                             f"Property {self.iri} requires at least one value of type {self.some_from}"
                         )
 
                 if self.all_from is not None:
-                    if not all(satisfies(x, self.all_from) for x in values):
+                    if not all(_satisfies_constraint(x, self.all_from) for x in values):
                         raise ValueError(
                             f"Property {self.iri} requires all values to be of type {self.all_from}"
                         )
@@ -317,8 +360,8 @@ class PropertySpec:
         # a literal and an instance of a class. Caught here rather than in to_pydantic_field
         # so the message can name the ontology at fault. Both sides must carry a target, so
         # a cardinality-only restriction still merges with a typed one.
-        mine_target = _restriction_target(self)
-        their_target = _restriction_target(other)
+        mine_target = self.restriction_target
+        their_target = other.restriction_target
         if (
             mine_target is not None
             and their_target is not None
@@ -326,7 +369,8 @@ class PropertySpec:
         ):
             raise ValueError(
                 f"Property {self.iri} is constrained to both a datatype and a class by two "
-                f"rdfs:range restrictions of {owner_iri}: {mine_target} and {their_target}"
+                f"rdfs:range restrictions of {owner_iri}: "
+                f"{_target_label(mine_target)} and {_target_label(their_target)}"
             )
 
         def reconcile_type(owl_term: str, mine: Any, theirs: Any) -> Any:
@@ -538,6 +582,27 @@ class PropertySpec:
 
         return property_spec
 
+    @staticmethod
+    def _datatype_of(
+        target: IRI, nested_property: IRI, owner_iri: IRI
+    ) -> Optional[Type]:
+        """The python type a restriction target resolves to, or None when it names a class.
+
+        A datatype we recognise but cannot map raises rather than falling through to the
+        class branch: silently treating `xsd:gMonth` as a class would give the property an
+        IRI field type and demand references where the ontology asked for literals.
+        """
+        if not _names_a_datatype(target):
+            return None
+
+        python_type = XSDToPythonTypes.get(target)
+        if python_type is None:
+            raise ValueError(
+                f"Property {nested_property}, restricted by the rdfs:range of {owner_iri}, "
+                f"has datatype target {target}, which kapps_ogm cannot map to a python type"
+            )
+        return python_type
+
     @classmethod
     def _specify_complex_property(
         cls,
@@ -625,32 +690,27 @@ class PropertySpec:
                     nested=None,
                 )
 
-                # The target decides the kind, not the keyword: owl:allValuesFrom xsd:string
-                # constrains a literal, owl:allValuesFrom cfc:Unit constrains an object.
-                # XSDToPythonTypes maps only XSD datatypes, so a miss means the target is a
-                # class and the IRI is carried through as-is.
+                # The target decides the kind, not the keyword: owl:allValuesFrom
+                # xsd:string constrains a literal, owl:allValuesFrom cfc:Unit constrains
+                # an object. A class target leaves value_kind at its OBJECT default.
                 if "someValuesFrom" in restriction:
                     target = IRI(restriction["someValuesFrom"]["value"])
-                    python_type = XSDToPythonTypes.get(target)
-                    nested_spec.some_from = (
-                        python_type if python_type is not None else target
-                    )
-                    nested_spec.value_kind = (
-                        PropertyValueKind.LITERAL
-                        if python_type is not None
-                        else PropertyValueKind.OBJECT
-                    )
+                    python_type = cls._datatype_of(target, nested_property, prop_iri)
+                    if python_type is not None:
+                        nested_spec.some_from = python_type
+                        nested_spec.value_kind = PropertyValueKind.LITERAL
+                    else:
+                        nested_spec.some_from = target
                     nested_spec.min_count = 1
 
                 elif "allValuesFrom" in restriction:
                     target = IRI(restriction["allValuesFrom"]["value"])
-                    python_type = XSDToPythonTypes.get(target)
+                    python_type = cls._datatype_of(target, nested_property, prop_iri)
                     if python_type is not None:
                         nested_spec.python_range_type = python_type
                         nested_spec.value_kind = PropertyValueKind.LITERAL
                     else:
                         nested_spec.all_from = target
-                        nested_spec.value_kind = PropertyValueKind.OBJECT
 
                 # Cardinality
                 if "effectiveMinCardinality" in restriction:

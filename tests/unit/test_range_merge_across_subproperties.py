@@ -1147,12 +1147,14 @@ class TestDatatypeAndClassTargetConflict:
                 hydration_level=True,
             )
 
-        assert str(shared_prop) in str(excinfo.value)
-        assert str(prop_iri) in str(excinfo.value)
-        # The datatype target is carried as the resolved python type, not the XSD IRI,
-        # because that is what the spec stores once XSDToPythonTypes has mapped it.
-        assert "<class 'str'>" in str(excinfo.value)
-        assert str(class_target) in str(excinfo.value)
+        message = str(excinfo.value)
+        assert str(shared_prop) in message
+        assert str(prop_iri) in message
+        assert str(class_target) in message
+        # The datatype target is carried as the resolved python type, so it is rendered by
+        # name rather than as a repr: "str", not "<class 'str'>".
+        assert "str" in message
+        assert "<class" not in message
 
     def test_two_different_class_targets_raise(self, ogm: OGM):
         """Both sides class-valued with different classes raises ValueError matching
@@ -1270,7 +1272,12 @@ class TestObjectValuedConstraintValidation:
         assert instance.test_field == [iri_value]
 
     def test_iri_constraint_rejects_a_non_reference_value(self):
-        """The same field rejects a list containing a non-IRI value with ValidationError."""
+        """The same field rejects a value that is not a reference at all.
+
+        A plain string is *not* rejected — `IRI` subclasses `str` and the field type would
+        coerce it, so rejecting it here would contradict the type the guard is protecting.
+        The check is "is this a reference", and an int is not one.
+        """
         nested_prop = IRI("https://example.org/vk#nestedProp2")
         class_iri = IRI("https://example.org/vk#AnotherClass")
 
@@ -1290,4 +1297,101 @@ class TestObjectValuedConstraintValidation:
         TestModel = create_model("TestModel2", test_field=(field_type, field))
 
         with pytest.raises(ValidationError):
-            TestModel(test_field=["not-an-iri"])
+            TestModel(test_field=[42])
+
+
+class TestUnmappableDatatypeTargets:
+    """Tests that a datatype target is never mistaken for a class just because the map lacks it.
+
+    XSDToPythonTypes covers 33 datatypes, so xsd:gMonth, xsd:gDay and xsd:dateTimeStamp are
+    absent from it. Deciding datatype-ness by dict membership would turn those restrictions
+    into object ones, giving the property an IRI field type and demanding references where
+    the ontology asked for literals.
+    """
+
+    def test_unmapped_xsd_datatype_raises_rather_than_becoming_a_class(self, ogm: OGM):
+        """owl:allValuesFrom xsd:gMonth is a datatype the map does not cover; it must raise,
+        naming the nested property, the owning property and the datatype.
+        """
+        NS_test = NS + "unmappedXSD_"
+        prop_iri = IRI(NS_test + "hasUnmappedTarget")
+        nested_prop = IRI(NS_test + "nestedProp")
+        g_month = IRI("http://www.w3.org/2001/XMLSchema#gMonth")
+
+        b1 = BNode()
+        triples = intersection_range(
+            prop_iri, [(b1, restriction(b1, nested_prop, all_values_from=g_month))]
+        )
+
+        ogm.db.triples_add(triples, check_exist=False)
+        ogm.db.triples_add(
+            [(prop_iri, IRI("rdf:type"), IRI("owl:ObjectProperty"))], check_exist=False
+        )
+
+        with pytest.raises(ValueError) as excinfo:
+            PropertySpec.specify(
+                prop_iri=prop_iri,
+                ogm=ogm,
+                nested_scope=ClassScope(),
+                hydration_level=True,
+            )
+
+        message = str(excinfo.value)
+        assert "cannot map to a python type" in message
+        assert str(nested_prop) in message
+        assert str(prop_iri) in message
+        assert str(g_month) in message
+
+    def test_rdfs_literal_target_is_treated_as_a_datatype(self, ogm: OGM):
+        """rdfs:Literal is the top datatype, not a class, even though it is outside the XSD
+        namespace. It must not silently become a class target.
+        """
+        NS_test = NS + "rdfsLiteral_"
+        prop_iri = IRI(NS_test + "hasLiteralTarget")
+        nested_prop = IRI(NS_test + "nestedProp")
+        rdfs_literal = IRI("http://www.w3.org/2000/01/rdf-schema#Literal")
+
+        b1 = BNode()
+        triples = intersection_range(
+            prop_iri, [(b1, restriction(b1, nested_prop, all_values_from=rdfs_literal))]
+        )
+
+        ogm.db.triples_add(triples, check_exist=False)
+        ogm.db.triples_add(
+            [(prop_iri, IRI("rdf:type"), IRI("owl:ObjectProperty"))], check_exist=False
+        )
+
+        with pytest.raises(ValueError, match="cannot map to a python type"):
+            PropertySpec.specify(
+                prop_iri=prop_iri,
+                ogm=ogm,
+                nested_scope=ClassScope(),
+                hydration_level=True,
+            )
+
+
+class TestReferenceConstraintAcceptsPlainStrings:
+    """Pins that the reference check agrees with the field type it guards.
+
+    validate_some_all runs as a BeforeValidator, ahead of pydantic's coercion, so a plain
+    string that the IRI field type would go on to accept has to pass the check too.
+    """
+
+    def test_plain_string_reference_is_accepted(self):
+        """A str that the IRI field type would coerce must not be rejected by the guard."""
+        spec = PropertySpec(
+            iri=IRI("https://example.org/refcheck#nestedProp"),
+            value_kind=PropertyValueKind.OBJECT,
+            python_range_type=None,
+            min_count=None,
+            max_count=None,
+            some_from=None,
+            all_from=IRI("https://example.org/refcheck#SomeClass"),
+            nested=None,
+        )
+
+        field_type, field = spec.to_pydantic_field()
+        Model = create_model("RefCheckModel", test_field=(field_type, field))
+
+        instance = Model(test_field=["https://example.org/instance#i1"])
+        assert len(instance.test_field) == 1

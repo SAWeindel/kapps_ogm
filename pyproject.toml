@@ -21,7 +21,12 @@ classifiers = [
 python = "^3.12"
 rdflib = "^7.1.3"
 pydantic = "^2.12.4"
-graph_db_interface = "^2.0.1"
+# TEMPORARY dev pin, see SAWeindel/kapps_ogm#23. Published 2.0.1 rejects an asymmetric
+# triples_update, which is exactly what Node.diff produces, so OGM.commit fails on any
+# change that does not remove and add the same number of triples. The fix is on this
+# branch but unreleased, and the next release is to carry further revisions we need this
+# fix in order to develop. Revert to a published version once that release is cut.
+graph_db_interface = { git = "https://github.com/SAWeindel/graph_db_interface.git", branch = "fix/bnode-identity-in-triples-update" }
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"

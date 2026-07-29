@@ -83,21 +83,26 @@ new_data = {
     # Note: Light barrier instance omitted -> OWA says that we CAN NOT delete it
 }
 
-# We want to see diff:
-# --- removed ---
-# ConveyorBeltFromData1 isWorking True
-# ConveyorBeltFromData1 hasConveyorPosition ?A
-# ?A hasValue 1.25
-# ?A hasUnit "meter"
+# The triple-level diff this commit sends to the store, logged at DEBUG by OGM.commit.
+# Note it is smaller than the data change suggests, because since #6 an anonymous node
+# carries a Skolem IRI that survives a write: the position node keeps its address, so
+# replacing its value is a one-triple swap rather than tearing the whole complex
+# attribute down and rebuilding it. hasConveyorPosition and hasUnit are never touched.
 #
-# --- added ---
-# ConveyorBeltFromData1 isWorking False
-# ConveyorBeltFromData1 hasConveyorSpeed ?B
-# ?B hasValue 1.23
-# ?B hasUnit "meter_per_second"
-# ConveyorBeltFromData1 hasConveyorPosition ?C
-# ?C hasValue -1.25
-# ?C hasUnit "meter"
+# --- removed (2) ---
+# <genid/A> hasValue 1.25
+# ConveyorBeltFromData1 isWorking true
+#
+# --- added (5) ---
+# <genid/A> hasValue -1.25                       # same node as above, not a new one
+# <genid/B> hasValue 1.23
+# <genid/B> hasUnit "meter_per_second"
+# ConveyorBeltFromData1 isWorking false
+# ConveyorBeltFromData1 hasConveyorSpeed <genid/B>
+#
+# The two "Diff for ..." lines the script prints are a different comparison: input data
+# against fetched payload. <empty> there is the pass condition, meaning the round trip
+# returned exactly what was written.
 
 
 def _sorted_json(data: dict) -> str:

@@ -5,6 +5,7 @@ Tests for SAWeindel/kapps_ogm#7: merge anonymous rdfs:range restrictions across 
 """
 
 import pytest
+from pydantic import create_model, ValidationError
 from rdflib import BNode, Literal, XSD
 from graph_db_interface import IRI
 
@@ -897,3 +898,396 @@ class TestMergeConjunctive:
 
         with pytest.raises(ValueError):
             spec1.merge_conjunctive(spec2, owner_iri=prop_iri)
+
+
+    def test_datatype_and_class_target_raise(self):
+        """Hand-built specs, one with python_range_type=str, one with all_from=IRI, raise
+        ValueError matching 'both a datatype and a class'.
+        """
+        prop_iri = IRI("https://example.org/mergeTest#ownerPropDC")
+        nested_prop = IRI("https://example.org/mergeTest#nestedPropDC")
+
+        spec1 = PropertySpec(
+            iri=nested_prop,
+            value_kind=PropertyValueKind.LITERAL,
+            python_range_type=str,
+            min_count=None,
+            max_count=None,
+            some_from=None,
+            all_from=str,
+            nested=None,
+        )
+
+        spec2 = PropertySpec(
+            iri=nested_prop,
+            value_kind=PropertyValueKind.OBJECT,
+            python_range_type=None,
+            min_count=None,
+            max_count=None,
+            some_from=None,
+            all_from=IRI("https://example.org/vk#SomeClass"),
+            nested=None,
+        )
+
+        with pytest.raises(ValueError, match="both a datatype and a class"):
+            spec1.merge_conjunctive(spec2, owner_iri=prop_iri)
+
+    def test_cardinality_only_spec_does_not_trigger_the_target_conflict(self):
+        """One spec with python_range_type=str, one with only max_count=2 and no target.
+        Assert the merge succeeds and python_range_type is str.
+        """
+        prop_iri = IRI("https://example.org/mergeTest#ownerPropCO")
+        nested_prop = IRI("https://example.org/mergeTest#nestedPropCO")
+
+        spec1 = PropertySpec(
+            iri=nested_prop,
+            value_kind=PropertyValueKind.LITERAL,
+            python_range_type=str,
+            min_count=None,
+            max_count=None,
+            some_from=None,
+            all_from=str,
+            nested=None,
+        )
+
+        spec2 = PropertySpec(
+            iri=nested_prop,
+            value_kind=PropertyValueKind.OBJECT,
+            python_range_type=None,
+            min_count=None,
+            max_count=2,
+            some_from=None,
+            all_from=None,
+            nested=None,
+        )
+
+        merged = spec1.merge_conjunctive(spec2, owner_iri=prop_iri)
+
+        assert merged.python_range_type is str
+        assert merged.max_count == 2
+
+
+class TestRestrictionTargetDecidesValueKind:
+    """Tests that value_kind follows the restriction's target (datatype vs class), not the OWL keyword."""
+
+    def test_class_valued_all_values_from_becomes_an_object_constraint(self, ogm: OGM):
+        """An intersection range whose restriction has owl:allValuesFrom pointing at a class IRI
+        yields value_kind OBJECT, all_from set to the class IRI, and python_range_type None.
+        """
+        NS_test = NS + "classAll_"
+        prop_iri = IRI(NS_test + "hasClassTarget")
+        nested_prop = IRI(NS_test + "nestedProp")
+        class_target = IRI(NS_test + "SomeClass")
+
+        b1 = BNode()
+        triples = intersection_range(
+            prop_iri,
+            [(b1, restriction(b1, nested_prop, all_values_from=class_target))],
+        )
+
+        type_triples = [(prop_iri, IRI("rdf:type"), IRI("owl:ObjectProperty"))]
+
+        ogm.db.triples_add(triples, check_exist=False)
+        ogm.db.triples_add(type_triples, check_exist=False)
+
+        prop_spec = PropertySpec.specify(
+            prop_iri=prop_iri,
+            ogm=ogm,
+            nested_scope=ClassScope(),
+            hydration_level=True,
+        )
+
+        assert prop_spec.value_kind is PropertyValueKind.COMPLEX
+        nested = prop_spec.nested.properties[nested_prop]
+        assert nested.value_kind is PropertyValueKind.OBJECT
+        assert nested.all_from == class_target
+        assert nested.python_range_type is None
+
+    def test_class_valued_some_values_from_becomes_an_object_constraint(self, ogm: OGM):
+        """An intersection range whose restriction has owl:someValuesFrom pointing at a class IRI
+        yields value_kind OBJECT, some_from set to the class IRI, and min_count 1 (ticket #11).
+        """
+        NS_test = NS + "classSome_"
+        prop_iri = IRI(NS_test + "hasClassSomeTarget")
+        nested_prop = IRI(NS_test + "nestedProp")
+        class_target = IRI(NS_test + "AnotherClass")
+
+        b1 = BNode()
+        triples = intersection_range(
+            prop_iri,
+            [(b1, restriction(b1, nested_prop, some_values_from=class_target))],
+        )
+
+        type_triples = [(prop_iri, IRI("rdf:type"), IRI("owl:ObjectProperty"))]
+
+        ogm.db.triples_add(triples, check_exist=False)
+        ogm.db.triples_add(type_triples, check_exist=False)
+
+        prop_spec = PropertySpec.specify(
+            prop_iri=prop_iri,
+            ogm=ogm,
+            nested_scope=ClassScope(),
+            hydration_level=True,
+        )
+
+        assert prop_spec.value_kind is PropertyValueKind.COMPLEX
+        nested = prop_spec.nested.properties[nested_prop]
+        assert nested.value_kind is PropertyValueKind.OBJECT
+        assert nested.some_from == class_target
+        assert nested.min_count == 1
+
+    def test_xsd_all_values_from_is_still_literal(self, ogm: OGM):
+        """Regression guard: owl:allValuesFrom xsd:string still yields value_kind LITERAL and
+        python_range_type str.
+        """
+        NS_test = NS + "xsdAll_"
+        prop_iri = IRI(NS_test + "hasXSDTarget")
+        nested_prop = IRI(NS_test + "nestedProp")
+
+        b1 = BNode()
+        triples = intersection_range(
+            prop_iri,
+            [(b1, restriction(b1, nested_prop, all_values_from=IRI("xsd:string")))],
+        )
+
+        type_triples = [(prop_iri, IRI("rdf:type"), IRI("owl:ObjectProperty"))]
+
+        ogm.db.triples_add(triples, check_exist=False)
+        ogm.db.triples_add(type_triples, check_exist=False)
+
+        prop_spec = PropertySpec.specify(
+            prop_iri=prop_iri,
+            ogm=ogm,
+            nested_scope=ClassScope(),
+            hydration_level=True,
+        )
+
+        assert prop_spec.value_kind is PropertyValueKind.COMPLEX
+        nested = prop_spec.nested.properties[nested_prop]
+        assert nested.value_kind is PropertyValueKind.LITERAL
+        assert nested.python_range_type is str
+
+    def test_cardinality_only_restriction_is_object_with_no_target(self, ogm: OGM):
+        """A restriction carrying only owl:maxCardinality yields value_kind OBJECT with
+        python_range_type, some_from and all_from all None.
+        """
+        NS_test = NS + "cardOnly_"
+        prop_iri = IRI(NS_test + "hasCardOnly")
+        nested_prop = IRI(NS_test + "nestedProp")
+
+        b1 = BNode()
+        triples = intersection_range(
+            prop_iri,
+            [(b1, restriction(b1, nested_prop, max_cardinality=2))],
+        )
+
+        type_triples = [(prop_iri, IRI("rdf:type"), IRI("owl:ObjectProperty"))]
+
+        ogm.db.triples_add(triples, check_exist=False)
+        ogm.db.triples_add(type_triples, check_exist=False)
+
+        prop_spec = PropertySpec.specify(
+            prop_iri=prop_iri,
+            ogm=ogm,
+            nested_scope=ClassScope(),
+            hydration_level=True,
+        )
+
+        assert prop_spec.value_kind is PropertyValueKind.COMPLEX
+        nested = prop_spec.nested.properties[nested_prop]
+        assert nested.value_kind is PropertyValueKind.OBJECT
+        assert nested.python_range_type is None
+        assert nested.some_from is None
+        assert nested.all_from is None
+        assert nested.max_count == 2
+
+
+class TestDatatypeAndClassTargetConflict:
+    """Tests that a datatype target and a class target on the same nested property raise at specify time."""
+
+    def test_datatype_and_class_targets_on_the_same_property_raise(self, ogm: OGM):
+        """A property whose intersection range restricts sharedProp to xsd:string, and a
+        superproperty whose intersection range restricts the same sharedProp to a class IRI,
+        raises ValueError whose message contains the nested property IRI, the owning property IRI,
+        and both targets.
+        """
+        NS_test = NS + "datatypeClassConflict_"
+        prop_iri = IRI(NS_test + "hasConflictingRange")
+        superprop_iri = IRI(NS_test + "baseConflictingRange")
+        shared_prop = IRI(NS_test + "sharedProp")
+        class_target = IRI(NS_test + "ConflictingClass")
+
+        b1 = BNode()
+        triples_prop = intersection_range(
+            prop_iri,
+            [(b1, restriction(b1, shared_prop, all_values_from=IRI("xsd:string")))],
+        )
+
+        b2 = BNode()
+        triples_super = intersection_range(
+            superprop_iri,
+            [(b2, restriction(b2, shared_prop, all_values_from=class_target))],
+        )
+
+        chain_triples = [
+            (prop_iri, IRI("rdf:type"), IRI("owl:ObjectProperty")),
+            (prop_iri, IRI("rdfs:subPropertyOf"), superprop_iri),
+            (superprop_iri, IRI("rdf:type"), IRI("owl:ObjectProperty")),
+        ]
+
+        ogm.db.triples_add(triples_prop, check_exist=False)
+        ogm.db.triples_add(triples_super, check_exist=False)
+        ogm.db.triples_add(chain_triples, check_exist=False)
+
+        with pytest.raises(ValueError) as excinfo:
+            PropertySpec.specify(
+                prop_iri=prop_iri,
+                ogm=ogm,
+                nested_scope=ClassScope(),
+                hydration_level=True,
+            )
+
+        assert str(shared_prop) in str(excinfo.value)
+        assert str(prop_iri) in str(excinfo.value)
+        # The datatype target is carried as the resolved python type, not the XSD IRI,
+        # because that is what the spec stores once XSDToPythonTypes has mapped it.
+        assert "<class 'str'>" in str(excinfo.value)
+        assert str(class_target) in str(excinfo.value)
+
+    def test_two_different_class_targets_raise(self, ogm: OGM):
+        """Both sides class-valued with different classes raises ValueError matching
+        'incompatible allValuesFrom'.
+        """
+        NS_test = NS + "classClassConflict_"
+        prop_iri = IRI(NS_test + "hasTwoClassRanges")
+        superprop_iri = IRI(NS_test + "baseTwoClassRanges")
+        shared_prop = IRI(NS_test + "sharedProp")
+        class_a = IRI(NS_test + "ClassA")
+        class_b = IRI(NS_test + "ClassB")
+
+        b1 = BNode()
+        triples_prop = intersection_range(
+            prop_iri,
+            [(b1, restriction(b1, shared_prop, all_values_from=class_a))],
+        )
+
+        b2 = BNode()
+        triples_super = intersection_range(
+            superprop_iri,
+            [(b2, restriction(b2, shared_prop, all_values_from=class_b))],
+        )
+
+        chain_triples = [
+            (prop_iri, IRI("rdf:type"), IRI("owl:ObjectProperty")),
+            (prop_iri, IRI("rdfs:subPropertyOf"), superprop_iri),
+            (superprop_iri, IRI("rdf:type"), IRI("owl:ObjectProperty")),
+        ]
+
+        ogm.db.triples_add(triples_prop, check_exist=False)
+        ogm.db.triples_add(triples_super, check_exist=False)
+        ogm.db.triples_add(chain_triples, check_exist=False)
+
+        with pytest.raises(ValueError, match="incompatible allValuesFrom"):
+            PropertySpec.specify(
+                prop_iri=prop_iri,
+                ogm=ogm,
+                nested_scope=ClassScope(),
+                hydration_level=True,
+            )
+
+    def test_cardinality_only_restriction_merges_with_a_typed_one(self, ogm: OGM):
+        """Property restricts sharedProp to xsd:string; superproperty restricts the same property
+        with owl:maxCardinality 2 only. Assert no raise, value_kind LITERAL, python_range_type str,
+        max_count 2.
+        """
+        NS_test = NS + "cardMergesTyped_"
+        prop_iri = IRI(NS_test + "hasCardPlusType")
+        superprop_iri = IRI(NS_test + "baseCardPlusType")
+        shared_prop = IRI(NS_test + "sharedProp")
+
+        b1 = BNode()
+        triples_prop = intersection_range(
+            prop_iri,
+            [(b1, restriction(b1, shared_prop, all_values_from=IRI("xsd:string")))],
+        )
+
+        b2 = BNode()
+        triples_super = intersection_range(
+            superprop_iri,
+            [(b2, restriction(b2, shared_prop, max_cardinality=2))],
+        )
+
+        chain_triples = [
+            (prop_iri, IRI("rdf:type"), IRI("owl:ObjectProperty")),
+            (prop_iri, IRI("rdfs:subPropertyOf"), superprop_iri),
+            (superprop_iri, IRI("rdf:type"), IRI("owl:ObjectProperty")),
+        ]
+
+        ogm.db.triples_add(triples_prop, check_exist=False)
+        ogm.db.triples_add(triples_super, check_exist=False)
+        ogm.db.triples_add(chain_triples, check_exist=False)
+
+        prop_spec = PropertySpec.specify(
+            prop_iri=prop_iri,
+            ogm=ogm,
+            nested_scope=ClassScope(),
+            hydration_level=True,
+        )
+
+        nested = prop_spec.nested.properties[shared_prop]
+        assert nested.value_kind is PropertyValueKind.LITERAL
+        assert nested.python_range_type is str
+        assert nested.max_count == 2
+
+
+class TestObjectValuedConstraintValidation:
+    """Tests that an IRI constraint in validate_some_all accepts IRI values and rejects non-references."""
+
+    def test_iri_constraint_accepts_an_iri_value(self):
+        """Build a PropertySpec with value_kind OBJECT, all_from=IRI, call to_pydantic_field(),
+        and validate that a list containing an IRI passes without raising TypeError.
+        """
+        nested_prop = IRI("https://example.org/vk#nestedProp")
+        class_iri = IRI("https://example.org/vk#SomeClass")
+
+        spec = PropertySpec(
+            iri=nested_prop,
+            value_kind=PropertyValueKind.OBJECT,
+            python_range_type=None,
+            min_count=None,
+            max_count=None,
+            some_from=None,
+            all_from=class_iri,
+            nested=None,
+        )
+
+        field_type, field = spec.to_pydantic_field()
+
+        TestModel = create_model("TestModel", test_field=(field_type, field))
+
+        iri_value = IRI("https://example.org/instance#someInstance")
+        instance = TestModel(test_field=[iri_value])
+        assert instance.test_field == [iri_value]
+
+    def test_iri_constraint_rejects_a_non_reference_value(self):
+        """The same field rejects a list containing a non-IRI value with ValidationError."""
+        nested_prop = IRI("https://example.org/vk#nestedProp2")
+        class_iri = IRI("https://example.org/vk#AnotherClass")
+
+        spec = PropertySpec(
+            iri=nested_prop,
+            value_kind=PropertyValueKind.OBJECT,
+            python_range_type=None,
+            min_count=None,
+            max_count=None,
+            some_from=None,
+            all_from=class_iri,
+            nested=None,
+        )
+
+        field_type, field = spec.to_pydantic_field()
+
+        TestModel = create_model("TestModel2", test_field=(field_type, field))
+
+        with pytest.raises(ValidationError):
+            TestModel(test_field=["not-an-iri"])

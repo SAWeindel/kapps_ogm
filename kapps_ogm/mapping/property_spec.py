@@ -43,6 +43,18 @@ def chain_ranges(prop_iri: IRI, range_var: str, ancestor_var: str = "?ancestor")
     )
 
 
+def _restriction_target(spec: "PropertySpec") -> Optional[Union[IRI, type]]:
+    """The datatype or class a restriction constrains values to.
+
+    None for a cardinality-only restriction, which says nothing about the value's type and
+    therefore cannot conflict with one that does.
+    """
+    for candidate in (spec.python_range_type, spec.all_from, spec.some_from):
+        if candidate is not None:
+            return candidate
+    return None
+
+
 def _tighten_bound(
     mine: Optional[int], theirs: Optional[int], combine: Callable[[int, int], int]
 ) -> Optional[int]:
@@ -202,14 +214,22 @@ class PropertySpec:
                     return v
                 values = v if isinstance(v, list) else [v]
 
+                def satisfies(x, constraint) -> bool:
+                    # A class-valued constraint arrives as an IRI, and class membership
+                    # cannot be decided without the store, so the strongest check available
+                    # here is that the value is a reference at all.
+                    if isinstance(constraint, IRI):
+                        return isinstance(x, IRI)
+                    return isinstance(x, constraint)
+
                 if self.some_from is not None:
-                    if not any(isinstance(x, self.some_from) for x in values):
+                    if not any(satisfies(x, self.some_from) for x in values):
                         raise ValueError(
                             f"Property {self.iri} requires at least one value of type {self.some_from}"
                         )
 
                 if self.all_from is not None:
-                    if not all(isinstance(x, self.all_from) for x in values):
+                    if not all(satisfies(x, self.all_from) for x in values):
                         raise ValueError(
                             f"Property {self.iri} requires all values to be of type {self.all_from}"
                         )
@@ -291,6 +311,22 @@ class PropertySpec:
         if self.iri != other.iri:
             raise ValueError(
                 f"Cannot merge PropertySpecs with different IRIs: {self.iri} vs {other.iri}"
+            )
+
+        # A datatype target and a class target are irreconcilable: the value cannot be both
+        # a literal and an instance of a class. Caught here rather than in to_pydantic_field
+        # so the message can name the ontology at fault. Both sides must carry a target, so
+        # a cardinality-only restriction still merges with a typed one.
+        mine_target = _restriction_target(self)
+        their_target = _restriction_target(other)
+        if (
+            mine_target is not None
+            and their_target is not None
+            and isinstance(mine_target, IRI) != isinstance(their_target, IRI)
+        ):
+            raise ValueError(
+                f"Property {self.iri} is constrained to both a datatype and a class by two "
+                f"rdfs:range restrictions of {owner_iri}: {mine_target} and {their_target}"
             )
 
         def reconcile_type(owl_term: str, mine: Any, theirs: Any) -> Any:
@@ -579,33 +615,42 @@ class PropertySpec:
                 nested_property = IRI(restriction["onProperty"]["value"])
                 nested_spec = cls(
                     iri=nested_property,
-                    value_kind=(
-                        PropertyValueKind.LITERAL
-                        if "someValuesFrom" in restriction
-                        or "allValuesFrom" in restriction
-                        else PropertyValueKind.OBJECT
-                    ),
+                    # Refined below from the restriction's target. A restriction carrying
+                    # only a cardinality says nothing about the value's type, so OBJECT is
+                    # the honest default.
+                    value_kind=PropertyValueKind.OBJECT,
                     python_range_type=None,
                     min_count=None,
                     max_count=None,
                     nested=None,
                 )
 
-                # Determine type and requiredness
+                # The target decides the kind, not the keyword: owl:allValuesFrom xsd:string
+                # constrains a literal, owl:allValuesFrom cfc:Unit constrains an object.
+                # XSDToPythonTypes maps only XSD datatypes, so a miss means the target is a
+                # class and the IRI is carried through as-is.
                 if "someValuesFrom" in restriction:
-                    range_iri = IRI(restriction["someValuesFrom"]["value"])
-                    range_type = XSDToPythonTypes[range_iri]
-                    if range_type:
-                        nested_spec.some_from = range_type
-                    else:
-                        nested_spec.some_from = range_iri
-
+                    target = IRI(restriction["someValuesFrom"]["value"])
+                    python_type = XSDToPythonTypes.get(target)
+                    nested_spec.some_from = (
+                        python_type if python_type is not None else target
+                    )
+                    nested_spec.value_kind = (
+                        PropertyValueKind.LITERAL
+                        if python_type is not None
+                        else PropertyValueKind.OBJECT
+                    )
                     nested_spec.min_count = 1
 
                 elif "allValuesFrom" in restriction:
-                    nested_spec.python_range_type = XSDToPythonTypes[
-                        IRI(restriction["allValuesFrom"]["value"])
-                    ]
+                    target = IRI(restriction["allValuesFrom"]["value"])
+                    python_type = XSDToPythonTypes.get(target)
+                    if python_type is not None:
+                        nested_spec.python_range_type = python_type
+                        nested_spec.value_kind = PropertyValueKind.LITERAL
+                    else:
+                        nested_spec.all_from = target
+                        nested_spec.value_kind = PropertyValueKind.OBJECT
 
                 # Cardinality
                 if "effectiveMinCardinality" in restriction:

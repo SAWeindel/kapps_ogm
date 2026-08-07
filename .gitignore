@@ -11,6 +11,10 @@ build/
 !/pyproject.toml
 !/README.md
 
+# Requirement specifications handed to this repo. Narrow on purpose: `!*.md`
+# would sweep in every stray note, which is what the `*` on line 1 exists to stop.
+!/docs/prd/*.md
+
 !*.py
 
 !*.log

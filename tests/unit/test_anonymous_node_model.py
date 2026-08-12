@@ -7,7 +7,7 @@ projection. See PRD requirement R4 and RDF 1.1 Concepts section 3.5.
 
 import pytest
 
-from graph_db_interface import IRI
+from kapps_triplestore_interface import IRI
 
 from kapps_ogm.mapping.anonymous_model import AnonymousNodeModel
 from kapps_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec

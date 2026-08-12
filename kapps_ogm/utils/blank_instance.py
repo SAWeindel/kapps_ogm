@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Optional, TYPE_CHECKING
 import pydantic as pd
 
-from graph_db_interface import IRI
+from kapps_triplestore_interface import IRI
 
 from kapps_ogm.mapping.class_spec import ClassSpec, ClassHydrationLevel
 from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind

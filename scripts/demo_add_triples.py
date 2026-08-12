@@ -1,5 +1,5 @@
 import os
-from graph_db_interface import GraphDBCredentials, GraphDB, IRI
+from kapps_triplestore_interface import GraphDBCredentials, GraphDB, IRI
 
 
 def main():

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 import logging
 
 from rdflib import BNode
-from graph_db_interface import IRI
+from kapps_triplestore_interface import IRI
 
 if TYPE_CHECKING:
     from .core import Node

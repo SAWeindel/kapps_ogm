@@ -11,7 +11,7 @@ Tests Phase 2.3: PropertySpec Edge Cases
 import pytest
 from unittest.mock import Mock
 
-from graph_db_interface import IRI
+from kapps_triplestore_interface import IRI
 from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from kapps_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
 from kapps_ogm.utils.class_scope import ClassScope

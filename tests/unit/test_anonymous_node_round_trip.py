@@ -15,7 +15,7 @@ from rdflib import BNode
 
 import pytest
 
-from graph_db_interface import IRI, to_literal
+from kapps_triplestore_interface import IRI, to_literal
 
 from kapps_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
 from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind

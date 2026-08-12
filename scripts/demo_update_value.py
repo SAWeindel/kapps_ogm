@@ -3,7 +3,7 @@ import os
 import logging
 import json
 
-from graph_db_interface import GraphDBCredentials, GraphDB, IRI
+from kapps_triplestore_interface import GraphDBCredentials, GraphDB, IRI
 
 from kapps_ogm.ogm import OGM
 from kapps_ogm.utils.class_scope import ClassScope

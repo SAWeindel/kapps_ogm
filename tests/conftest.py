@@ -2,7 +2,7 @@ import os
 import sys
 import pytest
 
-from graph_db_interface import GraphDB, GraphDBCredentials
+from kapps_triplestore_interface import GraphDB, GraphDBCredentials
 
 from kapps_ogm.ogm import OGM
 

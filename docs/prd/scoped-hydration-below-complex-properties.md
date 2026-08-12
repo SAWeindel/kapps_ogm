@@ -147,7 +147,7 @@ questions rather than answers.
   derived spec to fetch the old node (`kapps_ogm/ogm.py:437-444`). The two sides of the diff are
   therefore already symmetric by construction — the asymmetry R5 guards against is not present today.
 - Skolemisation (`#6`, shipped) gives a parameter node an IRI rather than a `BNode`. In
-  `graph_db_interface.utils.group_triples_by_bnode`, a triple containing no blank node becomes its
+  `kapps_triplestore_interface.utils.group_triples_by_bnode`, a triple containing no blank node becomes its
   own group (`utils.py:377-380`). So the whole-group DELETE/INSERT that motivated `#4` does not apply
   to skolemised parameter nodes; the diff is per-triple.
 

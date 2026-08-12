@@ -51,7 +51,7 @@ def format_node_data(node_data: Dict[Any, List[Any]]) -> Dict[str, Any]:
     Returns:
         Dict with all IRI/BNode objects converted to strings.
     """
-    from graph_db_interface import IRI
+    from kapps_triplestore_interface import IRI
     from rdflib import BNode
 
     def convert_to_serializable(obj):

@@ -68,7 +68,7 @@
   model has no `id` field; and `_value_to_triples` (`node_serializer.py`) minted another
   fresh `BNode` for any nested model without an `id` — on both sides of the diff. `Node.diff`
   therefore compared blank-node groups whose labels never matched, so a commit deleted the
-  whole old group and inserted a new one. Because `graph_db_interface.triples_update`
+  whole old group and inserted a new one. Because `kapps_triplestore_interface.triples_update`
   renders blank nodes as SPARQL variables, the DELETE matched the real node by structure,
   unlinking it and orphaning every triple the ClassSpec did not declare. A no-change commit
   was not a no-op. This was reproduced live on the ticket: after committing a speed value,
@@ -288,7 +288,7 @@
      `InvalidInputError: Old and new triples lists must have the same length.`
      Kept `triples_update` (its single atomic `DELETE/INSERT` transaction is
      required for SHACL-safe cardinality replacement — e.g. a possession handover)
-     and generalized `graph_db_interface.triples_update` to accept unequal lengths
+     and generalized `kapps_triplestore_interface.triples_update` to accept unequal lengths
      (see that repo's changelog).
 
   Together these make `OGM.commit` able to add, remove, and replace properties

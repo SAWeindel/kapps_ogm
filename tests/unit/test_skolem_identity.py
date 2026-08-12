@@ -6,7 +6,7 @@ Tests Skolem IRI minting and validation, plus OGM.fetch guard against anonymous 
 
 import pytest
 
-from graph_db_interface import IRI
+from kapps_triplestore_interface import IRI
 
 from kapps_ogm.utils.skolem import (
     mint_skolem_iri,

@@ -21,12 +21,15 @@ classifiers = [
 python = "^3.12"
 rdflib = "^7.1.3"
 pydantic = "^2.12.4"
-# TEMPORARY dev pin, see SAWeindel/kapps_ogm#22. Published 2.0.1 rejects an asymmetric
-# triples_update, which is exactly what Node.diff produces, so OGM.commit fails on any
-# change that does not remove and add the same number of triples. The fix is on this
-# branch but unreleased, and the next release is to carry further revisions we need this
-# fix in order to develop. Revert to a published version once that release is cut.
-graph_db_interface = { git = "https://github.com/SAWeindel/graph_db_interface.git", branch = "fix/bnode-identity-in-triples-update" }
+# The git branch pin this replaces (SAWeindel/kapps_ogm#22) held the unreleased asymmetric
+# `triples_update` -- the fix `Node.diff` needs, because a diff rarely removes and adds the
+# same number of triples. That fix is now published, under a new name: the library was forked
+# and renamed to `kapps-triplestore-interface`, and 2.1.0 is its first release
+# (kapps_semantic_middleware#133).
+#
+# The pin had to go, not merely age out. PyPI rejects any distribution whose metadata carries
+# a direct URL, so `kapps-ogm` could not be released at all while this line named a git repo.
+kapps-triplestore-interface = ">=2.1.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"

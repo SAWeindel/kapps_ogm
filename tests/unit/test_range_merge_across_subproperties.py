@@ -7,7 +7,7 @@ Tests for SAWeindel/kapps_ogm#7: merge anonymous rdfs:range restrictions across 
 import pytest
 from pydantic import create_model, ValidationError
 from rdflib import BNode, Literal, XSD
-from graph_db_interface import IRI
+from kapps_triplestore_interface import IRI
 
 from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind
 from kapps_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec

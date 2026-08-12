@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from graph_db_interface import IRI
-from graph_db_interface.utils.types import IRILike
+from kapps_triplestore_interface import IRI
+from kapps_triplestore_interface.utils.types import IRILike
 
 if TYPE_CHECKING:
     from kapps_ogm.node.core import Node

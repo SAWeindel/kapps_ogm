@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional, Type, TYPE_CHECKING, Any, Union, Annotated, Callable
 from enum import Enum
 from dataclasses import dataclass
-from graph_db_interface import IRI, XSDToPythonTypes
+from kapps_triplestore_interface import IRI, XSDToPythonTypes
 import logging
 from pydantic import BeforeValidator, Field, conlist
 from rdflib import BNode

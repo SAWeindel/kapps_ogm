@@ -4,8 +4,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Union
 import logging
 
-from graph_db_interface import IRI
-from graph_db_interface.exceptions import InvalidIRIError
+from kapps_triplestore_interface import IRI
+from kapps_triplestore_interface.exceptions import InvalidIRIError
 
 if TYPE_CHECKING:
     from .core import Node

@@ -12,7 +12,7 @@ import pytest
 from unittest.mock import Mock, patch
 from pydantic import ValidationError, BaseModel
 
-from graph_db_interface import IRI
+from kapps_triplestore_interface import IRI
 from kapps_ogm.node.core import Node
 from kapps_ogm.mapping.class_spec import ClassSpec
 from kapps_ogm.mapping.property_spec import PropertySpec

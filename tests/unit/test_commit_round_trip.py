@@ -19,7 +19,7 @@ from unittest.mock import Mock, patch
 import pytest
 from rdflib import BNode
 
-from graph_db_interface import GraphDB, IRI, to_literal
+from kapps_triplestore_interface import GraphDB, IRI, to_literal
 
 from kapps_ogm.mapping.class_spec import ClassHydrationLevel, ClassSpec
 from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind

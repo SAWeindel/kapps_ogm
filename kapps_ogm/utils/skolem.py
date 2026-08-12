@@ -22,7 +22,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from graph_db_interface import IRI
+from kapps_triplestore_interface import IRI
 
 
 WELL_KNOWN_GENID_PATH = "/.well-known/genid/"

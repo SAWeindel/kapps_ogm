@@ -1,4 +1,4 @@
-from graph_db_interface import IRI
+from kapps_triplestore_interface import IRI
 from typing import Protocol
 
 

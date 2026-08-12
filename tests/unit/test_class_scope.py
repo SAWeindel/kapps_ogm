@@ -1,7 +1,7 @@
 import pytest
 from deepdiff import DeepDiff
 
-from graph_db_interface import IRI
+from kapps_triplestore_interface import IRI
 from kapps_ogm.utils.class_scope import ClassScope
 
 

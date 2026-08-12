@@ -10,7 +10,7 @@ from typing import Set, Tuple
 import pytest
 from rdflib import BNode
 
-from graph_db_interface import IRI, to_literal
+from kapps_triplestore_interface import IRI, to_literal
 from kapps_ogm.node.core import Node
 from kapps_ogm.mapping.class_spec import ClassSpec, ClassHydrationLevel
 from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind

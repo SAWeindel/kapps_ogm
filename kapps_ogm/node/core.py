@@ -8,9 +8,9 @@ import json
 from pydantic import BaseModel, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
 from rdflib import BNode
-from graph_db_interface import IRI
-from graph_db_interface.utils import utils
-from graph_db_interface.utils.types import IRILike, Triple
+from kapps_triplestore_interface import IRI
+from kapps_triplestore_interface.utils import utils
+from kapps_triplestore_interface.utils.types import IRILike, Triple
 
 from kapps_ogm.mapping.property_spec import PropertyValueKind
 

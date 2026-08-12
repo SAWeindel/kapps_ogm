@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 from collections import defaultdict
 
 from rdflib import BNode, Literal
-from graph_db_interface import IRI, to_literal
-from graph_db_interface.utils.types import Triple
+from kapps_triplestore_interface import IRI, to_literal
+from kapps_triplestore_interface.utils.types import Triple
 
 from kapps_ogm.utils.errors import UnresolvableNodeAddressError
 from kapps_ogm.utils.skolem import WELL_KNOWN_GENID_PATH

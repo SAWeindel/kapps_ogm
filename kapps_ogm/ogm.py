@@ -4,8 +4,8 @@ from typing import Any, Callable, Optional
 import logging
 import pydantic as pd
 
-from graph_db_interface import GraphDB, IRI
-from graph_db_interface.utils.types import GraphNameLike
+from kapps_triplestore_interface import GraphDB, IRI
+from kapps_triplestore_interface.utils.types import GraphNameLike
 
 from kapps_ogm.node.core import Node
 from kapps_ogm.node.node_address import reconcile_anonymous_addresses

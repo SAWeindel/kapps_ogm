@@ -9,7 +9,7 @@ import pydantic as pd
 from pydantic import ConfigDict  # Pydantic v2
 
 
-from graph_db_interface import IRI
+from kapps_triplestore_interface import IRI
 from kapps_ogm.utils.pretty_print import format_class_spec
 from kapps_ogm.mapping.anonymous_model import AnonymousNodeModel
 from kapps_ogm.mapping.property_spec import PropertySpec, PropertyValueKind

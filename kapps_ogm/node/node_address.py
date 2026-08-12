@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from graph_db_interface import IRI
+from kapps_triplestore_interface import IRI
 
 from kapps_ogm.utils.errors import AmbiguousNodeAlignmentError
 

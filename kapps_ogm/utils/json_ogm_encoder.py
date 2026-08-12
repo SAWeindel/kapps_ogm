@@ -1,6 +1,6 @@
 import json
 from typing import Any
-from graph_db_interface import IRI
+from kapps_triplestore_interface import IRI
 
 
 def _unline(obj: Any):
